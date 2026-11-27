@@ -34,13 +34,12 @@ public class XRelayService {
     public static final String DEFAULT_WEB_BEARER_TOKEN =
             "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
 
-    private static final String DEFAULT_USER_AGENT =
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+    private static final String DEFAULT_USER_AGENT = XClientTransactionIdProvider.DEFAULT_WEB_USER_AGENT;
 
     private static final Map<String, String> DEFAULT_GRAPHQL_QUERY_IDS = Map.of(
             "CreateTweet", "xT36w0XM3A8jEuQtx2JIQw",
-            "SearchTimeline", "nK1dw4oV3k4w5TdtcAdSww",
-            "UserByScreenName", "xmU6X_CKVnQ5lSrCbAmJsg"
+            "SearchTimeline", "hyPfJYJ_XAtDYoslQc-Rgg",
+            "UserByScreenName", "Gb-d6r0vxPOADdG62OEBpQ"
     );
 
     private final ConnectorService connectorService;
@@ -48,19 +47,22 @@ public class XRelayService {
     private final AppProperties properties;
     private final ObjectMapper objectMapper;
     private final RelayActivityBuffer activityBuffer;
+    private final XClientTransactionIdProvider transactionIdProvider;
 
     public XRelayService(
             ConnectorService connectorService,
             HttpClientFactory httpClientFactory,
             AppProperties properties,
             ObjectMapper objectMapper,
-            RelayActivityBuffer activityBuffer
+            RelayActivityBuffer activityBuffer,
+            XClientTransactionIdProvider transactionIdProvider
     ) {
         this.connectorService = connectorService;
         this.httpClientFactory = httpClientFactory;
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.activityBuffer = activityBuffer;
+        this.transactionIdProvider = transactionIdProvider;
     }
 
     public RelayResponse relay(
@@ -163,6 +165,7 @@ public class XRelayService {
         Map<String, String> params = new LinkedHashMap<>();
         params.put("variables", writeJson(variables));
         params.put("features", writeJson(defaultTweetFeatures()));
+        params.put("fieldToggles", writeJson(Map.of("withArticleRichContentState", false)));
         return execute(profile, "GET", "/i/api/graphql/" + queryId + "/SearchTimeline", params, null);
     }
 
@@ -199,22 +202,40 @@ public class XRelayService {
             URI fullUri = appendQueryParams(baseUri, queryParams);
 
             int timeoutMs = httpClientFactory.resolveTimeoutMs(cfg, properties.getDefaultTimeoutMs());
-            HttpRequest.Builder reqBuilder = HttpRequest.newBuilder(fullUri)
-                    .timeout(Duration.ofMillis(timeoutMs))
-                    .header("Accept", "application/json");
-
-            applyAuthHeaders(reqBuilder, profile, httpMethod, baseUri, queryParams);
-
+            String jsonBody = null;
             if (body != null && !"GET".equals(httpMethod) && !"DELETE".equals(httpMethod)) {
-                String jsonBody = (body instanceof String s) ? s : objectMapper.writeValueAsString(body);
-                reqBuilder.header("Content-Type", "application/json");
-                reqBuilder.method(httpMethod, HttpRequest.BodyPublishers.ofString(jsonBody));
-            } else {
-                reqBuilder.method(httpMethod, HttpRequest.BodyPublishers.noBody());
+                jsonBody = (body instanceof String s) ? s : objectMapper.writeValueAsString(body);
             }
 
             HttpClient client = httpClientFactory.getClient(cfg, properties.getDefaultTimeoutMs());
-            HttpResponse<String> resp = client.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString());
+            String requestPath = StringUtils.hasText(baseUri.getPath()) ? baseUri.getPath() : "/";
+
+            String transactionId = null;
+            if (profile.getAuthMode() == AuthMode.COOKIE_AUTH) {
+                transactionId = transactionIdProvider
+                        .generateHeader(profile, client, baseUrl, httpMethod, requestPath, timeoutMs, false)
+                        .orElse(null);
+            }
+
+            HttpRequest request = buildHttpRequest(
+                    fullUri, baseUri, profile, httpMethod, queryParams, jsonBody, timeoutMs, transactionId
+            );
+            HttpResponse<String> resp = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            // X web APIs return HTTP 404 when x-client-transaction-id is missing or stale;
+            // mirror twscrape by refreshing transaction keys and retrying once on 404.
+            if (profile.getAuthMode() == AuthMode.COOKIE_AUTH && resp.statusCode() == 404) {
+                String refreshedTid = transactionIdProvider
+                        .generateHeader(profile, client, baseUrl, httpMethod, requestPath, timeoutMs, true)
+                        .orElse(null);
+                if (StringUtils.hasText(refreshedTid)) {
+                    HttpRequest retryRequest = buildHttpRequest(
+                            fullUri, baseUri, profile, httpMethod, queryParams, jsonBody, timeoutMs, refreshedTid
+                    );
+                    resp = client.send(retryRequest, HttpResponse.BodyHandlers.ofString());
+                }
+            }
+
             long durationMs = System.currentTimeMillis() - start;
             Object parsed = parseJsonOrText(resp.body());
             boolean ok = resp.statusCode() >= 200 && resp.statusCode() < 300;
@@ -235,6 +256,34 @@ public class XRelayService {
             activityBuffer.record(profile.getId(), ConnectorType.X, httpMethod + " " + normalizedPath, false, 502, durationMs, ex.getMessage());
             return RelayResponse.fail(profile.getId(), ConnectorType.X, 502, durationMs, "X relay failed: " + ex.getMessage(), null);
         }
+    }
+
+    private HttpRequest buildHttpRequest(
+            URI fullUri,
+            URI baseUri,
+            ConnectorProfile profile,
+            String httpMethod,
+            Map<String, String> queryParams,
+            String jsonBody,
+            int timeoutMs,
+            String transactionId
+    ) {
+        HttpRequest.Builder reqBuilder = HttpRequest.newBuilder(fullUri)
+                .timeout(Duration.ofMillis(timeoutMs))
+                .header("Accept", "application/json");
+
+        applyAuthHeaders(reqBuilder, profile, httpMethod, baseUri, queryParams);
+        if (StringUtils.hasText(transactionId)) {
+            reqBuilder.header("x-client-transaction-id", transactionId);
+        }
+
+        if (jsonBody != null) {
+            reqBuilder.header("Content-Type", "application/json");
+            reqBuilder.method(httpMethod, HttpRequest.BodyPublishers.ofString(jsonBody));
+        } else {
+            reqBuilder.method(httpMethod, HttpRequest.BodyPublishers.noBody());
+        }
+        return reqBuilder.build();
     }
 
     private void applyAuthHeaders(
@@ -307,45 +356,58 @@ public class XRelayService {
 
     private Map<String, Object> defaultTweetFeatures() {
         Map<String, Object> f = new LinkedHashMap<>();
-        f.put("communities_web_enable_tweet_community_results_fetch", true);
+        f.put("articles_preview_enabled", false);
         f.put("c9s_tweet_anatomy_moderator_badge_enabled", true);
-        f.put("responsive_web_edit_tweet_api_enabled", true);
-        f.put("graphql_is_translatable_rweb_tweet_is_translatable_enabled", true);
-        f.put("view_counts_everywhere_api_enabled", true);
-        f.put("longform_notetweets_consumption_enabled", true);
-        f.put("responsive_web_twitter_article_tweet_consumption_enabled", true);
-        f.put("tweet_awards_web_tipping_enabled", false);
+        f.put("communities_web_enable_tweet_community_results_fetch", true);
         f.put("creator_subscriptions_quote_tweet_preview_enabled", false);
-        f.put("longform_notetweets_rich_text_read_enabled", true);
-        f.put("longform_notetweets_inline_media_enabled", true);
-        f.put("articles_preview_enabled", true);
-        f.put("rweb_video_timestamps_enabled", true);
-        f.put("rweb_tipjar_consumption_enabled", true);
-        f.put("responsive_web_graphql_exclude_directive_enabled", true);
-        f.put("verified_phone_label_enabled", false);
+        f.put("creator_subscriptions_tweet_preview_api_enabled", true);
         f.put("freedom_of_speech_not_reach_fetch_enabled", true);
-        f.put("standardized_nudges_misinfo", true);
-        f.put("tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled", true);
-        f.put("responsive_web_graphql_skip_user_profile_image_extensions_enabled", false);
-        f.put("responsive_web_graphql_timeline_navigation_enabled", true);
+        f.put("graphql_is_translatable_rweb_tweet_is_translatable_enabled", true);
+        f.put("longform_notetweets_consumption_enabled", true);
+        f.put("longform_notetweets_inline_media_enabled", true);
+        f.put("longform_notetweets_rich_text_read_enabled", true);
+        f.put("responsive_web_edit_tweet_api_enabled", true);
         f.put("responsive_web_enhance_cards_enabled", false);
+        f.put("responsive_web_graphql_exclude_directive_enabled", true);
+        f.put("responsive_web_graphql_skip_user_profile_image_extensions_enabled", false);
+        f.put("responsive_web_grok_community_note_auto_translation_is_enabled", false);
+        f.put("responsive_web_graphql_timeline_navigation_enabled", true);
+        f.put("responsive_web_grok_imagine_annotation_enabled", false);
+        f.put("responsive_web_media_download_video_enabled", false);
+        f.put("responsive_web_profile_redirect_enabled", true);
+        f.put("responsive_web_twitter_article_tweet_consumption_enabled", true);
+        f.put("rweb_tipjar_consumption_enabled", true);
+        f.put("rweb_video_timestamps_enabled", true);
+        f.put("standardized_nudges_misinfo", true);
+        f.put("tweet_awards_web_tipping_enabled", false);
+        f.put("tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled", true);
+        f.put("tweet_with_visibility_results_prefer_gql_media_interstitial_enabled", false);
+        f.put("tweetypie_unmention_optimization_enabled", true);
+        f.put("verified_phone_label_enabled", false);
+        f.put("view_counts_everywhere_api_enabled", true);
+        f.put("responsive_web_grok_analyze_button_fetch_trends_enabled", false);
+        f.put("premium_content_api_read_enabled", false);
+        f.put("profile_label_improvements_pcf_label_in_post_enabled", false);
+        f.put("responsive_web_grok_share_attachment_enabled", false);
+        f.put("responsive_web_grok_analyze_post_followups_enabled", false);
+        f.put("responsive_web_grok_image_annotation_enabled", false);
+        f.put("responsive_web_grok_analysis_button_from_backend", false);
+        f.put("responsive_web_jetfuel_frame", false);
+        f.put("rweb_video_screen_enabled", true);
+        f.put("responsive_web_grok_show_grok_translated_post", true);
         return f;
     }
 
     private Map<String, Object> defaultUserFeatures() {
-        Map<String, Object> f = new LinkedHashMap<>();
+        Map<String, Object> f = new LinkedHashMap<>(defaultTweetFeatures());
+        f.put("highlights_tweets_tab_ui_enabled", true);
+        f.put("hidden_profile_likes_enabled", true);
         f.put("hidden_profile_subscriptions_enabled", true);
-        f.put("rweb_tipjar_consumption_enabled", true);
-        f.put("responsive_web_graphql_exclude_directive_enabled", true);
-        f.put("verified_phone_label_enabled", false);
-        f.put("subscriptions_verification_info_is_identity_verified_enabled", true);
         f.put("subscriptions_verification_info_verified_since_enabled", true);
-        f.put("highlights_tweets_tab_tweet_count", true);
-        f.put("responsive_web_twitter_article_notes_tab_enabled", true);
-        f.put("subscriptions_feature_can_gift_premium", true);
-        f.put("creator_subscriptions_tweet_preview_api_enabled", true);
-        f.put("responsive_web_graphql_skip_user_profile_image_extensions_enabled", false);
-        f.put("responsive_web_graphql_timeline_navigation_enabled", true);
+        f.put("subscriptions_verification_info_is_identity_verified_enabled", false);
+        f.put("responsive_web_twitter_article_notes_tab_enabled", false);
+        f.put("subscriptions_feature_can_gift_premium", false);
+        f.put("profile_label_improvements_pcf_label_in_post_enabled", false);
         return f;
     }
 

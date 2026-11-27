@@ -190,7 +190,7 @@
                             <li>按 <span class="inline-code">F12</span>（macOS 按 <span class="inline-code">Cmd + Option + I</span>）打开开发者工具，切换到顶部 <strong>Application（应用）</strong> 标签页。</li>
                             <li>在左侧菜单依次展开 <strong>Storage → Cookies → https://x.com</strong>。</li>
                             <li>在右侧列表中找到名称为 <span class="inline-code">auth_token</span> 的一行，双击并复制其 <strong>Value</strong> → 填入上方 <span class="inline-code">auth_token</span>。</li>
-                            <li>继续找到名称为 <span class="inline-code">ct0</span> 的一行，双击并复制其 <strong>Value</strong> → 填入上方 <span class="inline-code">ct0</span>（中转站会自动同步写入 Cookie 与 <span class="inline-code">x-csrf-token</span> 请求头）。</li>
+                            <li>继续找到名称为 <span class="inline-code">ct0</span> 的一行，双击并复制其 <strong>Value</strong> → 填入上方 <span class="inline-code">ct0</span>（中转站会自动同步写入 Cookie、<span class="inline-code">x-csrf-token</span> 及动态计算的 <span class="inline-code">x-client-transaction-id</span> 请求头，并在遇 404 时自动刷新重试）。</li>
                             <li>保存后在控制台点击 <strong>测试</strong>（验证 <span class="inline-code">GET /i/api/1.1/account/settings.json</span> 返回 200 即表示登录态有效）。</li>
                         </ol>
                         <div class="guide-note">
