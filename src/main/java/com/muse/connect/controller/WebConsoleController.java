@@ -62,7 +62,7 @@ public class WebConsoleController {
         model.addAttribute("connectors", connectorService.listMasked());
         model.addAttribute("activities", activityBuffer.recent(25));
         model.addAttribute("apiKeyEnabled", StringUtils.hasText(appProperties.getApiKey()));
-        return "index";
+        return "dashboard";
     }
 
     @GetMapping("/connectors/new")
