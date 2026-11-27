@@ -26,7 +26,7 @@
         <div th:if="${message}" class="alert alert-success" th:text="${message}"></div>
         <div th:if="${error}" class="alert alert-error" th:text="${error}"></div>
 
-        <form th:action="@{/login}" method="post" autocomplete="on">
+        <form id="loginForm" th:action="@{/login}" method="post" autocomplete="on">
             <input type="hidden" name="next" th:value="${next}">
 
             <div class="form-group">
@@ -43,11 +43,112 @@
                        placeholder="输入登录密码">
             </div>
 
+            <div class="login-options-row">
+                <label class="checkbox-label" for="rememberCredentials">
+                    <input id="rememberCredentials" type="checkbox">
+                    <span>保存账号信息（浏览器本地缓存）</span>
+                </label>
+                <button id="clearSavedLoginBtn" type="button" class="link-btn hidden">清除缓存</button>
+            </div>
+
             <button type="submit" class="btn btn-primary" style="width: 100%; padding: 10px 14px; margin-top: 6px;">
                 登录控制台
             </button>
         </form>
     </div>
 </main>
+
+<script>
+(function () {
+    const STORAGE_KEY = 'muse_any_connect_login_cache_v1';
+    const form = document.getElementById('loginForm');
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const rememberCheckbox = document.getElementById('rememberCredentials');
+    const clearBtn = document.getElementById('clearSavedLoginBtn');
+
+    function readCache() {
+        try {
+            const raw = window.localStorage.getItem(STORAGE_KEY);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+                return {
+                    username: typeof parsed.username === 'string' ? parsed.username : '',
+                    password: typeof parsed.password === 'string' ? parsed.password : ''
+                };
+            }
+        } catch (ignored) {
+            // Ignore malformed or unavailable localStorage
+        }
+        return null;
+    }
+
+    function writeCache(username, password) {
+        try {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                username: username || '',
+                password: password || ''
+            }));
+        } catch (ignored) {
+            // Ignore storage quota or private mode errors
+        }
+    }
+
+    function clearCache() {
+        try {
+            window.localStorage.removeItem(STORAGE_KEY);
+        } catch (ignored) {
+            // Ignore unavailable localStorage
+        }
+    }
+
+    function syncClearBtn(hasCache) {
+        if (clearBtn) {
+            clearBtn.classList.toggle('hidden', !hasCache);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const cached = readCache();
+        if (cached && (cached.username || cached.password)) {
+            rememberCheckbox.checked = true;
+            if (!usernameInput.value && cached.username) {
+                usernameInput.value = cached.username;
+            }
+            if (!passwordInput.value && cached.password && usernameInput.value === cached.username) {
+                passwordInput.value = cached.password;
+            }
+            syncClearBtn(true);
+        } else {
+            syncClearBtn(false);
+        }
+    });
+
+    rememberCheckbox.addEventListener('change', function () {
+        if (!rememberCheckbox.checked) {
+            clearCache();
+            syncClearBtn(false);
+        }
+    });
+
+    clearBtn.addEventListener('click', function () {
+        clearCache();
+        rememberCheckbox.checked = false;
+        usernameInput.value = '';
+        passwordInput.value = '';
+        syncClearBtn(false);
+        usernameInput.focus();
+    });
+
+    form.addEventListener('submit', function () {
+        if (rememberCheckbox.checked) {
+            writeCache(usernameInput.value.trim(), passwordInput.value);
+        } else {
+            clearCache();
+        }
+    });
+})();
+</script>
 </body>
 </html>

@@ -124,7 +124,7 @@ java -Xms32m -Xmx128m -jar target/muse-any-connect-0.1.0-SNAPSHOT.jar
 - **双轨鉴权**：
   - 配置 `MUSE_ADMIN_PASSWORD`（或 `MUSE_ADMIN_PASSWORD_HASH`）后，控制台页面（`/`、`/connectors/**`、`/playground`）与 `/api/**` 均受保护；未登录访问页面自动跳转 `/login`，未认证调用 `/api/**` 返回 `401`。
   - 同时配置 `MUSE_RELAY_API_KEY` 时，外部机器/Muse 通过请求头 `X-Muse-Key` 访问 `/api/**`，管理员登录后可在浏览器 Playground 直接调试。
-- **纵深防护**：Cookie 强制 `HttpOnly` + `SameSite=Lax`（反代 HTTPS 下自动开启 `Secure`），所有 Web 变更表单与导出接口强制校验 CSRF Token，并内置按 IP 登录防爆破锁定与安全响应头。
+- **纵深防护**：Cookie 强制 `HttpOnly` + `SameSite=Lax`（反代 HTTPS 下自动开启 `Secure`），所有 Web 变更表单与导出接口强制校验 CSRF Token，并内置按 IP 登录防爆破锁定与安全响应头；登录页可选勾选“保存账号信息”使用当前浏览器 `localStorage` 本地缓存并支持一键清除。
 
 ### Docker 与 GitHub Actions (GHCR) 自动构建部署
 

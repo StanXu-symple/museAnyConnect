@@ -56,6 +56,12 @@ class AdminAuthIntegrationTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/login"));
 
+        mockMvc.perform(get("/login"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("id=\"rememberCredentials\"")))
+                .andExpect(content().string(containsString("保存账号信息")))
+                .andExpect(content().string(containsString("muse_any_connect_login_cache_v1")));
+
         mockMvc.perform(get("/playground"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/login?next=%2Fplayground"));

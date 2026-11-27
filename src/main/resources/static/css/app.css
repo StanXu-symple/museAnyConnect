@@ -320,6 +320,46 @@ textarea.form-control {
     padding: 26px;
 }
 
+.login-options-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 2px 0 12px;
+}
+
+.checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.83rem;
+    color: #334155;
+    cursor: pointer;
+    user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.link-btn {
+    border: none;
+    background: transparent;
+    padding: 0;
+    font-size: 0.8rem;
+    color: var(--muted);
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.link-btn:hover {
+    color: var(--danger);
+}
+
 .nav-user {
     color: #94a3b8;
     font-size: 0.8rem;
