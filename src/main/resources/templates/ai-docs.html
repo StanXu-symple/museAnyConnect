@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 接口文档 (llms.txt) - MuseAnyConnect</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<header class="topbar">
+    <a class="brand" th:href="@{/}">
+        <span>MuseAnyConnect</span>
+        <span class="brand-tag">HTTP Relay</span>
+    </a>
+    <nav class="nav-links">
+        <a class="nav-link" th:href="@{/}">控制台</a>
+        <a class="nav-link" th:href="@{/playground}">在线调试</a>
+        <a class="nav-link active" th:href="@{/ai-docs}">AI 文档</a>
+        <span th:if="${authEnabled && currentUser != null}" class="nav-user mono" th:text="${currentUser}">admin</span>
+        <form th:if="${authEnabled}" class="inline-form" th:action="@{/logout}" method="post">
+            <input type="hidden" name="_csrf" th:value="${csrfToken}">
+            <button type="submit" class="btn btn-sm btn-topbar">退出</button>
+        </form>
+    </nav>
+</header>
+
+<main class="container">
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h2 class="card-title">AI 接口文档 (llms.txt · 注解自动生成)</h2>
+                <div class="muted">通过扫描控制器 <span class="mono">@AiApiGroup</span> / <span class="mono">@AiEndpoint</span> / <span class="mono">@AiField</span> 注解与当前已启用的连接器动态生成，零密钥泄露。</div>
+            </div>
+            <div class="btn-group">
+                <a th:if="${!onlyActive}" class="btn btn-sm" th:href="@{/ai-docs(onlyActive=true)}">仅看已启用连接器</a>
+                <a th:if="${onlyActive}" class="btn btn-sm btn-primary" th:href="@{/ai-docs(onlyActive=false)}">显示全部接口</a>
+                <button type="button" class="btn btn-primary btn-sm" onclick="copyText('aiDocPreview', this)">一键复制给 AI</button>
+                <a class="btn btn-sm" th:href="@{/api/ai/llms.txt(onlyActive=${onlyActive})}" target="_blank">打开纯文本</a>
+                <a class="btn btn-sm" th:href="@{/api/ai/catalog(onlyActive=${onlyActive})}" target="_blank">JSON 目录</a>
+            </div>
+        </div>
+
+        <div class="section-box" style="margin-top: 0;">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>给 AI / Agent 自动拉取的接口地址（需携带请求头 <span class="mono">X-Muse-Key</span>）</label>
+                <div class="btn-group">
+                    <input id="llmsUrlInput" type="text" class="form-control mono" style="flex: 1; min-width: 260px;"
+                           th:value="${llmsUrl}" readonly>
+                    <button type="button" class="btn btn-sm" onclick="copyInput('llmsUrlInput', this)">复制地址</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="aiDocPreview" class="code-block" th:text="${aiMarkdown}">Loading...</div>
+    </div>
+</main>
+
+<script>
+function copyText(elementId, btn) {
+    const text = document.getElementById(elementId).textContent;
+    doCopy(text, btn);
+}
+
+function copyInput(elementId, btn) {
+    const text = document.getElementById(elementId).value;
+    doCopy(text, btn);
+}
+
+async function doCopy(text, btn) {
+    const orig = btn.textContent;
+    try {
+        await navigator.clipboard.writeText(text);
+        btn.textContent = '已复制 ✓';
+    } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        btn.textContent = '已复制 ✓';
+    }
+    setTimeout(() => { btn.textContent = orig; }, 1600);
+}
+</script>
+</body>
+</html>

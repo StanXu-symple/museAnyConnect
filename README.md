@@ -35,6 +35,7 @@ museAnyConnect/
     ├── main/
     │   ├── java/com/muse/connect/
     │   │   ├── MuseAnyConnectApplication.java
+    │   │   ├── aidoc/               # 面向注解的 AI 文档引擎 (@AiApiGroup / @AiEndpoint / @AiField)
     │   │   ├── config/              # 配置属性、HttpClient 工厂、Relay 鉴权过滤器
     │   │   ├── controller/          # Thymeleaf 视图控制器 & REST 中转接口
     │   │   ├── model/               # 枚举、连接配置模型、统一响应模型
@@ -256,6 +257,30 @@ docker run -d --name muse-any-connect -p 8080:8080 muse-any-connect:local
     "append": false
   }
   ```
+
+### 5.5 AI 接口文档与注解扩展 (`/api/ai/**` & `/ai-docs`)
+
+本项目内置面向注解编程的动态 AI 文档引擎（零外部依赖），自动扫描 Spring MVC 控制器上标注了 `@AiApiGroup` / `@AiEndpoint` / `@AiField` 的接口，并结合运行时已启用的连接器清单（严格脱敏、零密钥输出）生成 AI 可读文档：
+
+- `GET /api/ai/llms.txt` — 动态生成 Markdown 格式 AI 调用指南（支持 `?onlyActive=true` 仅输出当前已启用连接器对应的接口分组）。
+- `GET /api/ai/catalog` — 返回同源结构化 JSON 目录（含已启用连接器元信息与反射出的接口参数定义）。
+- `GET /ai-docs` — 控制台可视化预览页，支持筛选与一键复制给 AI。
+
+**后续新增接口只需在 `AiDocMeta` 枚举中登记条目并在控制器加注解，无需改动文档生成器**：
+```java
+@AiApiGroup(AiDocMeta.GROUP_X_RELAY)
+@RestController
+@RequestMapping("/api/relay/x/{profileId}")
+public class MyController {
+
+    @AiEndpoint(AiDocMeta.EP_X_POST_TWEET)
+    @PostMapping("/custom")
+    public RelayResponse custom(
+            @PathVariable @AiField(AiDocMeta.FIELD_X_PROFILE_ID) String profileId,
+            @RequestBody MyRequest req
+    ) { ... }
+}
+```
 
 ---
 

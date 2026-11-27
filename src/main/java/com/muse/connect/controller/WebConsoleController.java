@@ -2,6 +2,7 @@ package com.muse.connect.controller;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.muse.connect.aidoc.AiDocService;
 import com.muse.connect.config.AppProperties;
 import com.muse.connect.model.AuthMode;
 import com.muse.connect.model.ConnectorConfig;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.util.List;
 
@@ -36,19 +38,22 @@ public class WebConsoleController {
     private final ObjectMapper objectMapper;
     private final AppProperties appProperties;
     private final AdminAuthService adminAuthService;
+    private final AiDocService aiDocService;
 
     public WebConsoleController(
             ConnectorService connectorService,
             RelayActivityBuffer activityBuffer,
             ObjectMapper objectMapper,
             AppProperties appProperties,
-            AdminAuthService adminAuthService
+            AdminAuthService adminAuthService,
+            AiDocService aiDocService
     ) {
         this.connectorService = connectorService;
         this.activityBuffer = activityBuffer;
         this.objectMapper = objectMapper;
         this.appProperties = appProperties;
         this.adminAuthService = adminAuthService;
+        this.aiDocService = aiDocService;
     }
 
     @GetMapping("/")
@@ -180,6 +185,16 @@ public class WebConsoleController {
         model.addAttribute("selectedProfileId", profileId);
         model.addAttribute("apiKeyEnabled", StringUtils.hasText(appProperties.getApiKey()));
         return "playground";
+    }
+
+    @GetMapping("/ai-docs")
+    public String aiDocs(@RequestParam(defaultValue = "false") boolean onlyActive, Model model) {
+        String baseUrl = ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();
+        String llmsUrl = baseUrl + "/api/ai/llms.txt" + (onlyActive ? "?onlyActive=true" : "");
+        model.addAttribute("onlyActive", onlyActive);
+        model.addAttribute("llmsUrl", llmsUrl);
+        model.addAttribute("aiMarkdown", aiDocService.renderMarkdown(baseUrl, onlyActive));
+        return "ai-docs";
     }
 
     private void populateFormModel(Model model, ConnectorProfile profile, boolean editing) {

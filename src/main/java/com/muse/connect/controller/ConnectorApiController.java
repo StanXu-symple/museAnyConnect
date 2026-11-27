@@ -1,5 +1,9 @@
 package com.muse.connect.controller;
 
+import com.muse.connect.aidoc.AiApiGroup;
+import com.muse.connect.aidoc.AiDocMeta;
+import com.muse.connect.aidoc.AiEndpoint;
+import com.muse.connect.aidoc.AiField;
 import com.muse.connect.model.ConnectorProfile;
 import com.muse.connect.model.RelayResponse;
 import com.muse.connect.model.SystemStats;
@@ -25,6 +29,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
+@AiApiGroup(AiDocMeta.GROUP_CONNECTOR_DISCOVERY)
 public class ConnectorApiController {
 
     private final ConnectorService connectorService;
@@ -41,13 +46,15 @@ public class ConnectorApiController {
         this.adminAuthService = adminAuthService;
     }
 
+    @AiEndpoint(AiDocMeta.EP_CONNECTOR_LIST)
     @GetMapping("/connectors")
     public List<ConnectorProfile> list() {
         return connectorService.listMasked();
     }
 
+    @AiEndpoint(AiDocMeta.EP_CONNECTOR_GET)
     @GetMapping("/connectors/{id}")
-    public ConnectorProfile get(@PathVariable String id) {
+    public ConnectorProfile get(@PathVariable @AiField(AiDocMeta.FIELD_CONNECTOR_ID) String id) {
         return connectorService.getMasked(id);
     }
 
@@ -62,8 +69,9 @@ public class ConnectorApiController {
         return Map.of("id", id, "enabled", enabled);
     }
 
+    @AiEndpoint(AiDocMeta.EP_CONNECTOR_TEST)
     @PostMapping("/connectors/{id}/test")
-    public RelayResponse test(@PathVariable String id) {
+    public RelayResponse test(@PathVariable @AiField(AiDocMeta.FIELD_CONNECTOR_ID) String id) {
         return connectorService.testConnection(id);
     }
 
@@ -91,6 +99,7 @@ public class ConnectorApiController {
         return Map.of("imported", profiles != null ? profiles.size() : 0);
     }
 
+    @AiEndpoint(AiDocMeta.EP_SYSTEM_STATS)
     @GetMapping("/stats")
     public Map<String, Object> stats() {
         SystemStats stats = connectorService.getStats();

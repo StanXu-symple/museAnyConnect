@@ -15,6 +15,7 @@
     <nav class="nav-links">
         <a class="nav-link" th:href="@{/}">控制台</a>
         <a class="nav-link" th:href="@{/playground}">在线调试</a>
+        <a class="nav-link" th:href="@{/ai-docs}">AI 文档</a>
         <span th:if="${authEnabled && currentUser != null}" class="nav-user mono" th:text="${currentUser}">admin</span>
         <form th:if="${authEnabled}" class="inline-form" th:action="@{/logout}" method="post">
             <input type="hidden" name="_csrf" th:value="${csrfToken}">
