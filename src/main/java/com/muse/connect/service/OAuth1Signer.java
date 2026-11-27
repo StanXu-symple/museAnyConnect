@@ -12,7 +12,7 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 /**
- * RFC 5849 OAuth 1.0a HMAC-SHA1 Authorization header generator for X API requests.
+ * 面向 X API 请求的 RFC 5849 OAuth 1.0a HMAC-SHA1 Authorization 请求头生成器。
  */
 public final class OAuth1Signer {
 

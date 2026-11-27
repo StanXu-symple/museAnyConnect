@@ -22,9 +22,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * In-memory administrator authentication backed by environment-injected credentials.
- * Uses PBKDF2-HMAC-SHA256 slow hashing, bounded session storage, CSRF tokens, and per-IP rate limiting.
- * Keeps zero authentication state in SQLite so the database stays strictly single-table.
+ * 基于环境变量注入凭据的内存管理员认证服务。
+ * 采用 PBKDF2-HMAC-SHA256 慢哈希、有界会话存储、CSRF 令牌与按 IP 限流机制。
+ * 不在 SQLite 中保存任何认证状态，确保数据库严格保持单表极简设计。
  */
 @Service
 public class AdminAuthService {
@@ -69,7 +69,7 @@ public class AdminAuthService {
             this.passwordSalt = salt;
             this.passwordHash = deriveKey(effectivePassword.toCharArray(), salt, DEFAULT_PBKDF2_ITERATIONS);
             this.enabled = true;
-            // Clear plaintext copy from config properties after hashing into memory
+            // 在内存中完成哈希派生后立即清除配置对象里的明文密码副本
             properties.clearPassword();
             if (usingDefaultPassword || AuthProperties.DEFAULT_PASSWORD.equals(effectivePassword)) {
                 log.warn("Admin login authentication ENABLED for user '{}' using default fallback password. Override MUSE_ADMIN_PASSWORD or MUSE_ADMIN_PASSWORD_HASH before exposing publicly.", adminUsername);
@@ -125,7 +125,7 @@ public class AdminAuthService {
         String candidateUser = username == null ? "" : username.trim();
         char[] candidatePass = password == null ? new char[0] : password.toCharArray();
 
-        // Always compute PBKDF2 even if username mismatches to avoid timing side channels
+        // 即使用户名不匹配也始终执行 PBKDF2 计算，防止时序侧信道攻击
         byte[] derived = deriveKey(candidatePass, passwordSalt, pbkdf2Iterations);
         boolean userMatch = constantTimeEquals(adminUsername, candidateUser);
         boolean passMatch = MessageDigest.isEqual(passwordHash, derived);

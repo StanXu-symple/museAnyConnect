@@ -79,7 +79,7 @@
                 };
             }
         } catch (ignored) {
-            // Ignore malformed or unavailable localStorage
+            // 忽略格式损坏或不可用的 localStorage
         }
         return null;
     }
@@ -91,7 +91,7 @@
                 password: password || ''
             }));
         } catch (ignored) {
-            // Ignore storage quota or private mode errors
+            // 忽略存储配额超限或隐私模式写入异常
         }
     }
 
@@ -99,7 +99,7 @@
         try {
             window.localStorage.removeItem(STORAGE_KEY);
         } catch (ignored) {
-            // Ignore unavailable localStorage
+            // 忽略不可用的 localStorage
         }
     }
 

@@ -37,7 +37,7 @@ class SaveRedirectRegressionTest {
         String testId = "x-save-redirect-test";
 
         try {
-            // 1. Login
+            // 1. 登录获取管理员会话 Cookie
             String loginBody = "username=admin&password=" + AuthProperties.DEFAULT_PASSWORD;
             HttpResponse<String> loginResp = client.send(
                     HttpRequest.newBuilder(URI.create(base + "/login"))
@@ -49,7 +49,7 @@ class SaveRedirectRegressionTest {
             assertThat(loginResp.statusCode()).isEqualTo(302);
             String museCookie = loginResp.headers().firstValue("set-cookie").orElseThrow().split(";", 2)[0];
 
-            // 2. Open /connectors/new?type=X to get CSRF
+            // 2. 打开 /connectors/new?type=X 页面获取 CSRF 令牌
             HttpResponse<String> formResp = client.send(
                     HttpRequest.newBuilder(URI.create(base + "/connectors/new?type=X"))
                             .header("Cookie", museCookie)
@@ -62,7 +62,7 @@ class SaveRedirectRegressionTest {
             assertThat(m.find()).isTrue();
             String csrf = m.group(1);
 
-            // 3. Submit /connectors/save with COOKIE_AUTH and Chinese name, empty apiBaseUrl
+            // 3. 提交 /connectors/save 表单（COOKIE_AUTH 模式、中文名称、apiBaseUrl 留空）
             String saveBody = "_csrf=" + enc(csrf)
                     + "&editing=false"
                     + "&id=" + testId
@@ -93,7 +93,7 @@ class SaveRedirectRegressionTest {
                 cookieHeader.append("; ").append(sc.split(";", 2)[0]);
             }
 
-            // 4. Following redirect renders dashboard cleanly with flash message and saved connector
+            // 4. 跟随重定向访问控制台首页，应正常展示提示消息与已保存的连接器
             HttpResponse<String> homeResp = client.send(
                     HttpRequest.newBuilder(targetUri)
                             .header("Cookie", cookieHeader.toString())
@@ -108,7 +108,7 @@ class SaveRedirectRegressionTest {
             try {
                 connectorService.delete(testId);
             } catch (Exception ignored) {
-                // ignore if test failed before creation
+                // 若测试在创建前即失败则忽略清理异常
             }
         }
     }

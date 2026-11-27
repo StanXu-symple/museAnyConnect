@@ -83,7 +83,7 @@ class XClientTransactionIdProviderTest {
         String tid = keys.generate("GET", "/i/api/1.1/account/settings.json", 1730000000_000L, 42);
         assertThat(tid).isNotBlank().doesNotContain("=");
 
-        // Decode XOR-obfuscated payload and verify structure: [mask, vk(32), ts(4), sha16(16), drn(1)]
+        // 解码经异或混淆的负载并校验字节结构：[mask, vk(32), ts(4), sha16(16), drn(1)]
         byte[] decoded = Base64.getDecoder().decode(tid);
         assertThat(decoded).hasSize(1 + 32 + 4 + 16 + 1);
         int mask = decoded[0] & 0xFF;
@@ -156,7 +156,7 @@ class XClientTransactionIdProviderTest {
                 int call = settingsCalls.incrementAndGet();
                 String tid = exchange.getRequestHeaders().getFirst("x-client-transaction-id");
                 lastTid.set(tid);
-                // Simulate stale transaction key returning 404 on first attempt, then 200 after refresh
+                // 模拟过期事务密钥首次请求返回 404，刷新后重试返回 200
                 if (tid == null || tid.isBlank() || call == 1) {
                     byte[] err = "{\"errors\":[{\"message\":\"Sorry, that page does not exist\",\"code\":34}]}"
                             .getBytes(StandardCharsets.UTF_8);
@@ -261,7 +261,7 @@ class XClientTransactionIdProviderTest {
             });
             server.createContext("/responsive-web/client-web/main.abc1234a.js", exchange -> {
                 int fetch = mainJsFetches.incrementAndGet();
-                // Simulate queryId rotation between first fetch and refresh after 404
+                // 模拟首次拉取与 404 后刷新之间发生 queryId 轮换
                 String qid = (fetch == 1) ? "staleCreateId001" : "rotatedCreateId002";
                 String js = "e.exports={queryId:\"" + qid + "\",operationName:\"CreateTweet\",operationType:\"mutation\","
                         + "metadata:{featureSwitches:[\"brand_new_future_switch_enabled\"]}}";

@@ -32,7 +32,7 @@ public class XRelayService {
     public static final String DEFAULT_BASE_URL = "https://api.x.com";
     public static final String DEFAULT_WEB_BASE_URL = "https://x.com";
 
-    /** Public bearer token embedded in the official X web client bundle (used alongside auth_token + ct0). */
+    /** 官方 X 网页客户端内置的公共 Bearer Token（与 auth_token + ct0 配合使用）。 */
     public static final String DEFAULT_WEB_BEARER_TOKEN =
             "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
 
@@ -278,8 +278,8 @@ public class XRelayService {
             );
             HttpResponse<String> resp = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-            // X web APIs return HTTP 404 when x-client-transaction-id is missing or stale;
-            // mirror twscrape by refreshing transaction keys and retrying once on 404.
+            // 当 x-client-transaction-id 缺失或过期时，X 网页接口会返回 HTTP 404；
+            // 参考 twscrape 策略，在收到 404 时刷新事务签名密钥并重试一次。
             if (profile.getAuthMode() == AuthMode.COOKIE_AUTH && resp.statusCode() == 404) {
                 String refreshedTid = transactionIdProvider
                         .generateHeader(profile, client, baseUrl, httpMethod, requestPath, timeoutMs, true)

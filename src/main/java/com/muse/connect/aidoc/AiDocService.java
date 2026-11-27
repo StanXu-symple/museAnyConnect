@@ -19,8 +19,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Generates dynamic, AI-readable Markdown documentation ({@code llms.txt}) and structured catalog
- * by combining annotation-scanned endpoints with live (strictly masked) enabled connector profiles.
+ * 结合注解扫描出的接口端点与当前已启用（且严格脱敏）的连接器配置，
+ * 动态生成面向 AI 可读的 Markdown 文档（{@code llms.txt}）与结构化目录。
  */
 @Service
 public class AiDocService {

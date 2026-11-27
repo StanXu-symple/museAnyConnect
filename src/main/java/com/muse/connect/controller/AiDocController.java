@@ -12,8 +12,8 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.util.Map;
 
 /**
- * Exposes dynamically generated, AI-readable API documentation built from {@code @AiApiGroup} / {@code @AiEndpoint}
- * annotations and currently enabled connector profiles. Protected by {@code RelayAuthFilter} under {@code /api/**}.
+ * 对外暴露基于 {@code @AiApiGroup} / {@code @AiEndpoint} 注解与当前已启用连接器配置动态生成的 AI 可读接口文档。
+ * 该控制器位于 {@code /api/**} 路径下，受 {@code RelayAuthFilter} 统一鉴权保护。
  */
 @RestController
 @RequestMapping("/api/ai")

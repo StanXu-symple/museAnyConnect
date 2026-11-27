@@ -17,6 +17,7 @@
 
 ## 3. 代码组织与安全规范
 - 包根目录：`com.muse.connect`
+- **全中文注释规范**：项目中所有注释（包括 Java Javadoc 与行内注释、测试代码注释、HTML/CSS/JS 注释、SQL/YAML/Dockerfile/配置文件注释）必须统一使用中文编写；专有名词、协议名称或代码标识符可保留英文原词。禁止新增纯英文注释（Dockerfile 语法指令 `# syntax=...`、脚本 Shebang `#!/bin/sh` 等工具声明除外）。
 - 所有对外返回的连接配置 DTO 必须对敏感字段（`bearerToken`, `apiSecret`, `accessTokenSecret`, `authToken`, `ct0`, `botToken`, `password`, `privateKey`, `passphrase`）进行脱敏；编辑更新时，若前端提交占位符或空值，应保留原库中已存密钥（除非用户明确清除/替换）。
 - 所有外部调用（X / Telegram / SSH）必须具备明确的超时控制，禁止无限阻塞线程。
 - 新增接口或功能后，同步更新 `README.md` 并补充 JUnit 5 单元/集成测试，执行 `mvn test` 验证全量通过。

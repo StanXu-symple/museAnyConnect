@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
- * Bounded JVM ring buffer for recent relay calls so SQLite database never grows with audit logs.
+ * 用于保存最近中转调用记录的 JVM 定长环形缓冲区，避免审计流水写入 SQLite 导致数据库膨胀。
  */
 @Component
 public class RelayActivityBuffer {

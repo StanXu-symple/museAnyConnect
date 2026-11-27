@@ -70,7 +70,7 @@ public class AuthController {
             return "redirect:/";
         }
 
-        // Invalidate any previous session cookie to prevent session fixation
+        // 使先前可能存在的会话 Cookie 失效，防止会话固定攻击
         RelayAuthFilter.extractSessionCookie(request).ifPresent(adminAuthService::invalidateSession);
 
         AuthResult result = adminAuthService.authenticate(username, password, request.getRemoteAddr());

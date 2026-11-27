@@ -124,11 +124,11 @@ class WebAndRelayIntegrationTest {
 
     @Test
     void relaysXAndTelegramRequestsAndRendersThymeleafPages() throws Exception {
-        // 0. Default hardcoded fallback credentials protect API & console when env vars are unset
+        // 0. 未设置环境变量时，默认回退凭据仍保护 API 与 Web 控制台
         mockMvc.perform(get("/api/stats")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/")).andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("/login"));
 
-        // 1. Create X OAuth1a profile using default fallback X-Muse-Key (123456789)
+        // 1. 使用默认回退 X-Muse-Key（123456789）创建 X OAuth 1.0a 连接器配置
         ConnectorProfile xProfile = new ConnectorProfile();
         xProfile.setId("x-mock");
         xProfile.setName("Mock X");
@@ -149,7 +149,7 @@ class WebAndRelayIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.config.apiSecret").value("****"));
 
-        // 2. Relay X tweet
+        // 2. 中转转发 X 发推请求
         mockMvc.perform(post("/api/relay/x/x-mock/tweet")
                         .header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -161,7 +161,7 @@ class WebAndRelayIntegrationTest {
 
         assertThat(lastAuthHeader.get()).startsWith("OAuth ");
 
-        // 3. Create Telegram profile
+        // 3. 创建 Telegram 连接器配置
         ConnectorProfile tgProfile = new ConnectorProfile();
         tgProfile.setId("tg-mock");
         tgProfile.setName("Mock TG");
@@ -179,7 +179,7 @@ class WebAndRelayIntegrationTest {
                         .content(objectMapper.writeValueAsString(tgProfile)))
                 .andExpect(status().isOk());
 
-        // 4. Relay Telegram sendMessage using defaultChatId
+        // 4. 使用默认 defaultChatId 中转转发 Telegram sendMessage 请求
         mockMvc.perform(post("/api/relay/telegram/tg-mock/send")
                         .header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -188,7 +188,7 @@ class WebAndRelayIntegrationTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.result.message_id").value(77));
 
-        // 5. Log in using default fallback admin credentials (admin / 123456) and render Thymeleaf UI pages
+        // 5. 使用默认回退管理员凭据（admin / 123456）登录并渲染 Thymeleaf 页面
         MvcResult loginResult = mockMvc.perform(post("/login")
                         .param("username", "admin")
                         .param("password", AuthProperties.DEFAULT_PASSWORD))
@@ -229,7 +229,7 @@ class WebAndRelayIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Muse HTTP Relay Playground")));
 
-        // 6. Save connector via Thymeleaf form POST
+        // 6. 通过 Thymeleaf 表单 POST 保存连接器
         mockMvc.perform(post("/connectors/save")
                         .cookie(sessionCookie)
                         .param("_csrf", csrfToken)
@@ -245,7 +245,7 @@ class WebAndRelayIntegrationTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/"));
 
-        // 7. X COOKIE_AUTH (auth_token + ct0) profile creation, test, tweet, and user lookup
+        // 7. 验证 X COOKIE_AUTH（auth_token + ct0）配置创建、连通性测试、发推及按用户名查询
         ConnectorProfile cookieProfile = new ConnectorProfile();
         cookieProfile.setId("x-cookie-mock");
         cookieProfile.setName("Cookie X");
@@ -291,7 +291,7 @@ class WebAndRelayIntegrationTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.data.user.result.legacy.screen_name").value("jack"));
 
-        // Cleanup
+        // 清理测试数据
         mockMvc.perform(delete("/api/connectors/x-mock").header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)).andExpect(status().isOk());
         mockMvc.perform(delete("/api/connectors/tg-mock").header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)).andExpect(status().isOk());
         mockMvc.perform(delete("/api/connectors/ssh-ui-test").header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)).andExpect(status().isOk());

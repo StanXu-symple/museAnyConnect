@@ -13,8 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Ensures the persistent data volume subdirectories (SQLite directory & logs directory) exist
- * before HikariCP/SQLite opens the database file.
+ * 在 HikariCP/SQLite 打开数据库文件之前，确保持久化数据卷下的子目录（SQLite 目录与日志目录）均已创建。
  */
 @Component
 public class DataDirectoryInitializer implements BeanFactoryPostProcessor, EnvironmentAware {

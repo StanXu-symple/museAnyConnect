@@ -3,7 +3,7 @@ package com.muse.connect.aidoc;
 import java.util.List;
 
 /**
- * Immutable reflection snapshot of an {@link AiEndpoint}-annotated Spring MVC handler method.
+ * 标注了 {@link AiEndpoint} 的 Spring MVC 处理方法的不可变反射快照。
  */
 public record AiEndpointDescriptor(
         String groupName,

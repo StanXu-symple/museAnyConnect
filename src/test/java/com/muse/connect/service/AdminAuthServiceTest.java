@@ -71,7 +71,7 @@ class AdminAuthServiceTest {
         assertThat(locked.status()).isEqualTo(AuthResult.Status.LOCKED_OUT);
         assertThat(locked.retryAfterSeconds()).isPositive();
 
-        // Another IP is unaffected
+        // 其他 IP 不受锁定影响
         AdminSession s1 = service.authenticate("admin", "secret", "192.168.1.51").session();
         AdminSession s2 = service.authenticate("admin", "secret", "192.168.1.51").session();
         AdminSession s3 = service.authenticate("admin", "secret", "192.168.1.51").session();

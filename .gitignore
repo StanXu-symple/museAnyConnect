@@ -1,4 +1,4 @@
-# Maven
+# Maven 构建产物
 target/
 pom.xml.tag
 pom.xml.releaseBackup
@@ -10,7 +10,7 @@ buildNumber.properties
 .mvn/timing.properties
 .mvn/wrapper/maven-wrapper.jar
 
-# Java
+# Java 编译与打包产物
 *.class
 *.log
 *.jar
@@ -23,14 +23,14 @@ buildNumber.properties
 hs_err_pid*
 replay_pid*
 
-# IntelliJ IDEA
+# IntelliJ IDEA 配置
 .idea/
 *.iws
 *.iml
 *.ipr
 out/
 
-# Eclipse / STS
+# Eclipse / STS 配置
 .apt_generated
 .classpath
 .factorypath
@@ -40,10 +40,10 @@ out/
 .sts4-cache
 bin/
 
-# VS Code
+# VS Code 配置
 .vscode/
 
-# OS
+# 操作系统与编辑器临时文件
 .DS_Store
 Thumbs.db
 Desktop.ini
@@ -51,7 +51,7 @@ Desktop.ini
 *.swo
 *~
 
-# Local config, logs, SQLite data & exported secrets
+# 本地配置、日志、SQLite 数据与导出密钥
 data/
 logs/
 *.db

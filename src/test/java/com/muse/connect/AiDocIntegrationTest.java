@@ -50,7 +50,7 @@ class AiDocIntegrationTest {
 
     @Test
     void scansAnnotatedEndpointsAndGeneratesDynamicMaskedLlmsTxt() throws Exception {
-        // 1. Scanner discovers annotated endpoints & reflects request body record fields automatically
+        // 1. 扫描器自动发现标注注解的端点，并通过反射提取请求体 Record 字段
         List<AiEndpointDescriptor> endpoints = aiDocScanner.getEndpoints();
         assertThat(endpoints).isNotEmpty();
         assertThat(endpoints).anySatisfy(ep -> {
@@ -63,15 +63,15 @@ class AiDocIntegrationTest {
                     .containsExactly("text", "replyToTweetId");
             assertThat(ep.bodyFields().get(0).description()).isEqualTo(AiDocMeta.FIELD_X_TWEET_TEXT.description());
         });
-        // Sensitive unannotated endpoints are never exposed to AI
+        // 未标注注解的敏感接口绝不会暴露给 AI
         assertThat(endpoints).noneMatch(ep -> ep.path().contains("/connectors/export"));
 
-        // 2. AI doc endpoints enforce authentication
+        // 2. AI 文档接口强制要求身份认证
         mockMvc.perform(get("/api/ai/llms.txt")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/ai/catalog")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/ai-docs")).andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("/login?next=%2Fai-docs"));
 
-        // 3. Seed one enabled SSH profile and one disabled X profile with real secret values
+        // 3. 写入一条已启用的 SSH 配置和一条已禁用的 X 配置（包含真实敏感密钥）
         ConnectorProfile sshProfile = new ConnectorProfile();
         sshProfile.setId("ssh-ai-demo");
         sshProfile.setName("Prod SSH Box");
@@ -99,7 +99,7 @@ class AiDocIntegrationTest {
         connectorService.upsert(disabledX);
 
         try {
-            // 4. Full llms.txt includes live enabled profile, constraints, real profileId in curl, and zero secrets
+            // 4. 完整 llms.txt 包含实时已启用的配置、约束信息、curl 中的真实 profileId，且不泄露任何敏感密钥
             mockMvc.perform(get("/api/ai/llms.txt")
                             .header(RelayAuthFilter.HEADER_NAME, TEST_API_KEY))
                     .andExpect(status().isOk())
@@ -114,7 +114,7 @@ class AiDocIntegrationTest {
                     .andExpect(content().string(not(containsString("ultra-secret-x-token"))))
                     .andExpect(content().string(not(containsString(TEST_API_KEY))));
 
-            // 5. onlyActive=true filters out connector groups with no enabled profiles
+            // 5. onlyActive=true 会过滤掉没有已启用配置的连接器分组
             mockMvc.perform(get("/api/ai/llms.txt")
                             .param("onlyActive", "true")
                             .header(RelayAuthFilter.HEADER_NAME, TEST_API_KEY))
@@ -124,7 +124,7 @@ class AiDocIntegrationTest {
                     .andExpect(content().string(not(containsString("X (Twitter) Relay"))))
                     .andExpect(content().string(not(containsString("Telegram Bot Relay"))));
 
-            // 6. Structured JSON catalog returns active connectors and reflected endpoints
+            // 6. 结构化 JSON 目录返回当前活跃连接器与反射出的接口端点
             mockMvc.perform(get("/api/ai/catalog")
                             .param("onlyActive", "true")
                             .header(RelayAuthFilter.HEADER_NAME, TEST_API_KEY))
@@ -134,7 +134,7 @@ class AiDocIntegrationTest {
                     .andExpect(jsonPath("$.activeConnectors[?(@.profileId=='ssh-ai-demo')]").exists())
                     .andExpect(jsonPath("$.endpoints[?(@.path=='/api/relay/ssh/{profileId}/exec')]").exists());
 
-            // 7. Authenticated admin can view /ai-docs console page
+            // 7. 已认证管理员可访问 /ai-docs 控制台页面
             MvcResult loginResult = mockMvc.perform(post("/login")
                             .param("username", "admin")
                             .param("password", AuthProperties.DEFAULT_PASSWORD))

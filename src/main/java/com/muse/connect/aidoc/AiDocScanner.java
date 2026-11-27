@@ -31,8 +31,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Scans Spring MVC's {@link RequestMappingHandlerMapping} once to discover all endpoints
- * annotated with {@link AiEndpoint} and reflect their HTTP method, route, parameters, and body schema.
+ * 扫描 Spring MVC 的 {@link RequestMappingHandlerMapping} 一次，发现所有标注了 {@link AiEndpoint} 的端点，
+ * 并通过反射解析其 HTTP 方法、路由路径、参数列表及请求体结构。
  */
 @Component
 public class AiDocScanner {

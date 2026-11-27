@@ -44,14 +44,14 @@ class AdminAuthIntegrationTest {
 
     @Test
     void protectsWebAndApiWithLoginCsrfRateLimitAndApiKey() throws Exception {
-        // 1. Public health endpoint stays accessible without login
+        // 1. 公开健康检查端点无需登录即可访问
         mockMvc.perform(get("/health"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                 .andExpect(header().string("X-Frame-Options", "DENY"))
                 .andExpect(jsonPath("$.status").value("UP"));
 
-        // 2. Unauthenticated console & API requests are rejected
+        // 2. 未认证的控制台与 API 请求将被拦截拒绝
         mockMvc.perform(get("/"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/login"));
@@ -72,12 +72,12 @@ class AdminAuthIntegrationTest {
         mockMvc.perform(get("/api/connectors/export"))
                 .andExpect(status().isUnauthorized());
 
-        // 3. Machine API caller with X-Muse-Key succeeds without browser session or CSRF
+        // 3. 机器 API 调用方携带 X-Muse-Key 即可成功访问，无需浏览器会话或 CSRF 令牌
         mockMvc.perform(get("/api/stats").header(RelayAuthFilter.HEADER_NAME, "machine-secret-key"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.stats.connectorCount").isNumber());
 
-        // 4. Failed logins trigger IP lockout after 3 attempts
+        // 4. 连续登录失败 3 次后触发 IP 临时锁定
         mockMvc.perform(post("/login")
                         .with(req -> {
                             req.setRemoteAddr("203.0.113.10");
@@ -106,7 +106,7 @@ class AdminAuthIntegrationTest {
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().exists(HttpHeaders.RETRY_AFTER));
 
-        // 5. Valid login from clean IP sets HttpOnly SameSite=Lax cookie and ignores unsafe next URL
+        // 5. 未锁定 IP 正常登录后下发 HttpOnly SameSite=Lax Cookie，并忽略不安全的 next 跳转地址
         MvcResult loginResult = mockMvc.perform(post("/login")
                         .with(req -> {
                             req.setRemoteAddr("198.51.100.20");
@@ -125,7 +125,7 @@ class AdminAuthIntegrationTest {
         String sessionId = extractCookieValue(setCookie, RelayAuthFilter.SESSION_COOKIE_NAME);
         Cookie sessionCookie = new Cookie(RelayAuthFilter.SESSION_COOKIE_NAME, sessionId);
 
-        // 6. Authenticated dashboard renders user info and CSRF token
+        // 6. 已认证访问控制台首页可正常渲染用户信息与 CSRF 令牌
         MvcResult homeResult = mockMvc.perform(get("/").cookie(sessionCookie))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("opsadmin")))
@@ -135,7 +135,7 @@ class AdminAuthIntegrationTest {
         String csrfToken = extractCsrfToken(homeResult.getResponse().getContentAsString());
         assertThat(csrfToken).isNotBlank();
 
-        // 7. Mutating Web POST without CSRF is blocked with 403; with CSRF succeeds
+        // 7. 未携带 CSRF 令牌的 Web 写操作 POST 返回 403；携带后成功执行
         mockMvc.perform(post("/connectors/export").cookie(sessionCookie))
                 .andExpect(status().isForbidden());
 
@@ -145,7 +145,7 @@ class AdminAuthIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"));
 
-        // 8. Authenticated session calling /api/** POST requires X-CSRF-Token
+        // 8. 已认证会话调用 /api/** 写操作 POST 时必须附带 X-CSRF-Token 请求头
         String payload = """
                 {"id":"tg-auth-test","name":"Auth TG","type":"TELEGRAM","authMode":"BOT_TOKEN","enabled":true,"config":{"botToken":"123:abc"}}
                 """;
@@ -167,7 +167,7 @@ class AdminAuthIntegrationTest {
                         .header(RelayAuthFilter.HEADER_NAME, "machine-secret-key"))
                 .andExpect(status().isOk());
 
-        // 9. Logout invalidates the session immediately
+        // 9. 退出登录后会话立即失效
         mockMvc.perform(post("/logout")
                         .cookie(sessionCookie)
                         .param("_csrf", csrfToken))

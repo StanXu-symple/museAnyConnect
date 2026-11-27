@@ -53,7 +53,7 @@ class ConnectorServiceAndSqliteTest {
         ConnectorProfile saved = connectorService.upsert(ssh);
         assertThat(saved.getConfig().getPassword()).isEqualTo(ConnectorConfig.MASK);
 
-        // Update name with masked password -> original password must be preserved in raw entity
+        // 提交脱敏占位密码更新名称时，数据库中原有密码必须保留不变
         saved.setName("Updated SSH Name");
         connectorService.upsert(saved);
         assertThat(connectorService.getRaw("ssh-unit-test").getConfig().getPassword())
@@ -122,7 +122,7 @@ class ConnectorServiceAndSqliteTest {
         assertThat(saved.getConfig().getCt0()).isEqualTo(ConnectorConfig.MASK);
         assertThat(saved.getConfig().getGraphqlQueryIds()).isEqualTo("CreateTweet=abc123");
 
-        // Updating name with masked values keeps original authToken & ct0 intact
+        // 提交脱敏占位值更新名称时，原有 authToken 与 ct0 必须保持不变
         saved.setName("Cookie X Renamed");
         connectorService.upsert(saved);
         ConnectorProfile raw = connectorService.getRaw("x-cookie-unit");

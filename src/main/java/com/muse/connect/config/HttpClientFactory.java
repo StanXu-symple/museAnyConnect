@@ -10,7 +10,7 @@ import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Reuses HttpClient instances by proxy key to avoid creating selector threads per relay call.
+ * 按代理键复用 HttpClient 实例，避免每次中转请求都新建 Selector 线程。
  */
 @Component
 public class HttpClientFactory {

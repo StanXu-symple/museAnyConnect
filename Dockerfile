@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-# Stage 1: Build fat jar natively on the host architecture (pure Java bytecode)
+# 阶段 1：在宿主机架构上原生构建可执行 Fat Jar（纯 Java 字节码）
 FROM --platform=$BUILDPLATFORM maven:3.9-eclipse-temurin-17-noble AS builder
 
 WORKDIR /build
@@ -12,7 +12,7 @@ COPY src ./src
 RUN mvn -B clean package -DskipTests \
     && cp target/muse-any-connect-*.jar /build/app.jar
 
-# Stage 2: Minimal JRE runtime (multi-arch: linux/amd64 & linux/arm64)
+# 阶段 2：极简 JRE 运行时镜像（支持多架构：linux/amd64 与 linux/arm64）
 FROM eclipse-temurin:17-jre-noble
 
 WORKDIR /app

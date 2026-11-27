@@ -9,13 +9,13 @@ public class ConnectorConfig {
 
     public static final String MASK = "****";
 
-    // Common HTTP / network fields
+    // 通用 HTTP 与网络配置字段
     private String apiBaseUrl;
     private String proxyHost;
     private Integer proxyPort;
     private Integer timeoutMs;
 
-    // X (Twitter) fields
+    // X (Twitter) 连接器字段
     private String bearerToken;
     private String apiKey;
     private String apiSecret;
@@ -25,12 +25,12 @@ public class ConnectorConfig {
     private String ct0;
     private String graphqlQueryIds;
 
-    // Telegram fields
+    // Telegram 连接器字段
     private String botToken;
     private String defaultChatId;
     private String parseMode;
 
-    // SSH fields
+    // SSH 连接器字段
     private String host;
     private Integer port;
     private String username;

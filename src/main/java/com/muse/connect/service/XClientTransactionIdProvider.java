@@ -33,11 +33,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Generates X web {@code x-client-transaction-id} headers for {@code COOKIE_AUTH} requests.
+ * 为 {@code COOKIE_AUTH} 模式请求生成 X 网页端 {@code x-client-transaction-id} 请求头。
  * <p>
- * Mirrors the algorithm used by X's web client (and twscrape's {@code XClIdGen}):
- * fetches an authenticated X page to extract the verification key, SVG animation curves,
- * and dynamic signing script indices, then caches the derived keys in a small bounded map.
+ * 复刻 X 网页客户端（以及 twscrape 中 {@code XClIdGen}）的签名算法：
+ * 拉取已认证的 X 页面以提取校验密钥、SVG 动画曲线与动态签名脚本索引，并将派生结果缓存在小容量有界映射中。
  */
 @Component
 public class XClientTransactionIdProvider {
@@ -242,7 +241,7 @@ public class XClientTransactionIdProvider {
                         }
                     }
                 } catch (Exception ignored) {
-                    // Skip unreachable chunk and continue scanning
+                    // 跳过无法访问的脚本分片并继续扫描
                 }
             }
         } finally {
@@ -421,7 +420,7 @@ public class XClientTransactionIdProvider {
     static List<String> extractScriptUrls(String html, URI pageUri) {
         Set<String> urls = new LinkedHashSet<>();
 
-        // Support script tags referencing local/relative signing or main bundles first (reverse proxy / test mock)
+        // 优先支持引用本地或相对路径签名脚本与主包的 script 标签（适配反向代理或测试桩）
         Matcher localScriptMatcher = LOCAL_SCRIPT_SRC_PATTERN.matcher(html);
         while (localScriptMatcher.find()) {
             String src = localScriptMatcher.group(1);
@@ -515,7 +514,7 @@ public class XClientTransactionIdProvider {
                     }
                 }
             } catch (Exception ignored) {
-                // Skip unreachable chunk and continue scanning
+                // 跳过无法访问的脚本分片并继续扫描
             }
         }
         throw new IllegalStateException("X signing script reference not found in web bundles");

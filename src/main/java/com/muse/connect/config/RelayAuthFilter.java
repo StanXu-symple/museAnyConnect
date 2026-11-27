@@ -22,9 +22,9 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Unified security filter protecting both:
- * 1) Web console routes (/, /connectors/**, /playground, /logout) via admin session cookie + CSRF token
- * 2) Machine API routes (/api/**) via X-Muse-Key header or authenticated admin session (with CSRF on mutations)
+ * 统一安全过滤器，同时保护以下两类路由：
+ * 1) Web 控制台路由（/、/connectors/**、/playground、/logout）：通过管理员会话 Cookie + CSRF 令牌校验
+ * 2) 机器 API 路由（/api/**）：通过 X-Muse-Key 请求头或已认证的管理员会话校验（写操作需附带 CSRF 令牌）
  */
 @Component
 public class RelayAuthFilter extends OncePerRequestFilter {
