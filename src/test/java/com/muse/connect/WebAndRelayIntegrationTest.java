@@ -207,7 +207,11 @@ class WebAndRelayIntegrationTest {
                 .andExpect(content().string(containsString("MuseAnyConnect")))
                 .andExpect(content().string(containsString("Mock X")))
                 .andExpect(content().string(containsString("Mock TG")))
+                .andExpect(content().string(containsString("href=\"/connectors/new?type=X\">连接器</a>")))
                 .andReturn();
+        assertThat(homeResult.getResponse().getContentAsString())
+                .doesNotContain("+ Telegram")
+                .doesNotContain("+ SSH 服务器");
         String csrfToken = extractCsrfToken(homeResult.getResponse().getContentAsString());
 
         mockMvc.perform(get("/connectors/new").param("type", "X").cookie(sessionCookie))

@@ -16,9 +16,7 @@
         <a class="nav-link active" th:href="@{/}">控制台</a>
         <a class="nav-link" th:href="@{/playground}">在线调试</a>
         <a class="nav-link" th:href="@{/ai-docs}">AI 文档</a>
-        <a class="btn btn-primary btn-sm" th:href="@{/connectors/new(type='X')}">+ X 连接</a>
-        <a class="btn btn-primary btn-sm" th:href="@{/connectors/new(type='TELEGRAM')}">+ Telegram</a>
-        <a class="btn btn-primary btn-sm" th:href="@{/connectors/new(type='SSH')}">+ SSH 服务器</a>
+        <a class="btn btn-primary btn-sm" th:href="@{/connectors/new(type='X')}">连接器</a>
         <span th:if="${authEnabled && currentUser != null}" class="nav-user mono" th:text="${currentUser}">admin</span>
         <form th:if="${authEnabled}" class="inline-form" th:action="@{/logout}" method="post">
             <input type="hidden" name="_csrf" th:value="${csrfToken}">
@@ -84,7 +82,7 @@
         </div>
 
         <div th:if="${#lists.isEmpty(connectors)}" class="muted" style="padding: 18px 0;">
-            暂无连接器配置。点击右上角按钮添加 <strong>X</strong>、<strong>Telegram</strong> 或 <strong>SSH</strong> 连接。
+            暂无连接器配置。点击右上角“<strong>连接器</strong>”按钮添加 <strong>X</strong>、<strong>Telegram</strong> 或 <strong>SSH</strong> 连接。
         </div>
 
         <div th:if="${!#lists.isEmpty(connectors)}" class="table-wrap">
