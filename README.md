@@ -17,7 +17,7 @@
 | 框架 | Spring Boot 3.5.11 | Web + Thymeleaf + JDBC（不使用 JPA/Hibernate 以降低内存占用） |
 | 数据库 | SQLite (`sqlite-jdbc`) | 单文件嵌入式持久化（WAL 模式），挂载数据卷后重启不丢配置 |
 | SSH 引擎 | `com.github.mwiede:jsch` 0.2.21 | 轻量单包，支持现代 OpenSSH 密钥算法 |
-| Telegram 个人账号侧车 | Go 1.22 + `gotd/td` (`tg-user-bridge/`) | 约 15~20MB 静态镜像，支持无状态 `StringSession`、HTTP/SOCKS5 代理与 MTProto 全能力 |
+| Telegram 个人账号侧车 | Go 1.25 + `gotd/td` (`tg-user-bridge/`) | 约 15~20MB 静态镜像，支持无状态 `StringSession`、HTTP/SOCKS5 代理与 MTProto 全能力 |
 | 前端界面 | Thymeleaf + 原生 CSS/JS | 零构建步骤，开箱即用 |
 
 ### 目录结构

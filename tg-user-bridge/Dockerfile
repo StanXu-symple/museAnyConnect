@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # 第一阶段：在宿主机原生架构上静态编译 Go 二进制（支持 amd64/arm64 交叉编译）
-FROM --platform=$BUILDPLATFORM golang:1.22-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
 
 WORKDIR /build
 

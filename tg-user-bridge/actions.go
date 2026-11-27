@@ -258,7 +258,7 @@ func (s *BridgeServer) handleSendMessage(ctx context.Context, req SendMessageReq
 		return nil, err
 	}
 
-	builder := message.NewSender(mc.client.API()).To(peer)
+	builder := &message.NewSender(mc.client.API()).To(peer).Builder
 	if req.DisableNotification {
 		builder = builder.Silent()
 	}

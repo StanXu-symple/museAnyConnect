@@ -89,7 +89,7 @@ func (s *BridgeServer) withAuth(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // jsonEndpoint 统一处理 JSON 解码、上下文超时控制与标准响应封包。
-func jsonEndpoint[Req any](fn func(context.Context, Req) (any, error)) http.HandlerFunc {
+func jsonEndpoint[Req any, Resp any](fn func(context.Context, Req) (Resp, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req Req
 		body := io.LimitReader(r.Body, maxRequestBytes)
