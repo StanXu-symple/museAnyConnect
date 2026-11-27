@@ -16,6 +16,7 @@ import com.muse.connect.repository.RelayActivityBuffer;
 import com.muse.connect.service.AdminAuthService;
 import com.muse.connect.service.ConnectorException;
 import com.muse.connect.service.ConnectorService;
+import com.muse.connect.service.TelegramRelayService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -40,15 +41,40 @@ public class ConnectorApiController {
     private final ConnectorService connectorService;
     private final RelayActivityBuffer activityBuffer;
     private final AdminAuthService adminAuthService;
+    private final TelegramRelayService telegramRelayService;
 
     public ConnectorApiController(
             ConnectorService connectorService,
             RelayActivityBuffer activityBuffer,
-            AdminAuthService adminAuthService
+            AdminAuthService adminAuthService,
+            TelegramRelayService telegramRelayService
     ) {
         this.connectorService = connectorService;
         this.activityBuffer = activityBuffer;
         this.adminAuthService = adminAuthService;
+        this.telegramRelayService = telegramRelayService;
+    }
+
+    /** Telegram 个人账号交互登录发送验证码请求体 */
+    public record TelegramAuthStartRequest(
+            Integer apiId,
+            String apiHash,
+            String phone,
+            String bridgeUrl,
+            String bridgeToken,
+            String proxyHost,
+            Integer proxyPort
+    ) {
+    }
+
+    /** Telegram 个人账号交互登录提交验证码或两步验证密码请求体 */
+    public record TelegramAuthVerifyRequest(
+            String loginId,
+            String code,
+            String password,
+            String bridgeUrl,
+            String bridgeToken
+    ) {
     }
 
     @AiEndpoint(AiDocMeta.EP_CONNECTOR_LIST)
@@ -102,6 +128,32 @@ public class ConnectorApiController {
     public Map<String, Object> importJson(@RequestBody List<ConnectorProfile> profiles) {
         connectorService.importAll(profiles);
         return Map.of(WebViewConstants.KEY_IMPORTED, profiles != null ? profiles.size() : 0);
+    }
+
+    /** 发起 Telegram 个人账号验证码登录（由控制台或管理员 API 调用） */
+    @PostMapping(RouteConstants.API_TELEGRAM_AUTH_START)
+    public Object startTelegramUserAuth(@RequestBody TelegramAuthStartRequest req) {
+        return telegramRelayService.startUserAuth(
+                req.apiId(),
+                req.apiHash(),
+                req.phone(),
+                req.bridgeUrl(),
+                req.bridgeToken(),
+                req.proxyHost(),
+                req.proxyPort()
+        );
+    }
+
+    /** 提交 Telegram 登录验证码及可选 2FA 云密码，换取持久化 Session 字符串 */
+    @PostMapping(RouteConstants.API_TELEGRAM_AUTH_VERIFY)
+    public Object verifyTelegramUserAuth(@RequestBody TelegramAuthVerifyRequest req) {
+        return telegramRelayService.verifyUserAuth(
+                req.loginId(),
+                req.code(),
+                req.password(),
+                req.bridgeUrl(),
+                req.bridgeToken()
+        );
     }
 
     @AiEndpoint(AiDocMeta.EP_SYSTEM_STATS)

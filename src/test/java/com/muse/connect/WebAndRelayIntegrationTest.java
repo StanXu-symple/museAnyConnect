@@ -207,7 +207,7 @@ class WebAndRelayIntegrationTest {
                 .andExpect(content().string(containsString("MuseAnyConnect")))
                 .andExpect(content().string(containsString("Mock X")))
                 .andExpect(content().string(containsString("Mock TG")))
-                .andExpect(content().string(containsString("href=\"/connectors/new?type=X\">连接器</a>")))
+                .andExpect(content().string(containsString("<a class=\"nav-link\" href=\"/connectors/new?type=X\">连接器</a>")))
                 .andReturn();
         assertThat(homeResult.getResponse().getContentAsString())
                 .doesNotContain("+ Telegram")
@@ -216,6 +216,7 @@ class WebAndRelayIntegrationTest {
 
         mockMvc.perform(get("/connectors/new").param("type", "X").cookie(sessionCookie))
                 .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<a class=\"nav-link active\" href=\"/connectors/new?type=X\">连接器</a>")))
                 .andExpect(content().string(containsString("如何拿到 X 的 Bearer Token / OAuth 2.0 Token")))
                 .andExpect(content().string(containsString("如何拿到 X 的 OAuth 1.0a 四个密钥")))
                 .andExpect(content().string(containsString("普通用户如何从浏览器获取 X 的 auth_token 和 ct0")));
@@ -227,6 +228,7 @@ class WebAndRelayIntegrationTest {
 
         mockMvc.perform(get("/playground").param("profileId", "x-mock").cookie(sessionCookie))
                 .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<a class=\"nav-link\" href=\"/connectors/new?type=X\">连接器</a>")))
                 .andExpect(content().string(containsString("Muse HTTP Relay Playground")));
 
         // 6. 通过 Thymeleaf 表单 POST 保存连接器

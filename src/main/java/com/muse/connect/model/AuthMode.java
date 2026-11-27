@@ -7,6 +7,7 @@ public enum AuthMode {
     OAUTH1A(ConnectorType.X, ConnectorLabelConstants.AUTH_OAUTH1A),
     COOKIE_AUTH(ConnectorType.X, ConnectorLabelConstants.AUTH_COOKIE_AUTH),
     BOT_TOKEN(ConnectorType.TELEGRAM, ConnectorLabelConstants.AUTH_BOT_TOKEN),
+    USER_SESSION(ConnectorType.TELEGRAM, ConnectorLabelConstants.AUTH_USER_SESSION),
     PASSWORD(ConnectorType.SSH, ConnectorLabelConstants.AUTH_PASSWORD),
     PRIVATE_KEY(ConnectorType.SSH, ConnectorLabelConstants.AUTH_PRIVATE_KEY);
 

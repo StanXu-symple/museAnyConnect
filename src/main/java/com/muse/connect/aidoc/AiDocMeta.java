@@ -26,10 +26,10 @@ public enum AiDocMeta {
             10
     ),
 
-    /** Telegram 机器人中转接口分组：发送消息、拉取更新以及透传调用任意 Bot API 方法 */
+    /** Telegram 中转接口分组：同时支持 Bot API 机器人与个人账号 MTProto (gotd/td) 全能力读写与收发 */
     GROUP_TELEGRAM_RELAY(
-            "Telegram Bot Relay",
-            "Send messages, fetch updates, or invoke any Telegram Bot API method through configured bot profiles.",
+            "Telegram Relay (Bot & User Account)",
+            "Send/reply/edit/delete/forward messages, list dialogs, read group history, search messages, or invoke Bot API methods through BOT_TOKEN or USER_SESSION (gotd/td MTProto) profiles.",
             ConnectorType.TELEGRAM,
             20
     ),
@@ -82,25 +82,81 @@ public enum AiDocMeta {
             40
     ),
 
-    /** Telegram 快捷发送文本消息接口 */
+    /** Telegram 快捷发送文本消息接口（支持 Bot 与个人账号） */
     EP_TELEGRAM_SEND_MESSAGE(
-            "Send a text message to a Telegram chat",
-            "",
+            "Send or reply to a text message in a Telegram chat",
+            "Works for both BOT_TOKEN and USER_SESSION (MTProto) profiles. Pass replyToMessageId to reply to a specific message.",
             10
     ),
 
-    /** Telegram 拉取机器人消息更新接口（可用于获取 Chat ID 与最新消息） */
+    /** Telegram 拉取机器人消息更新接口（仅 BOT_TOKEN 模式） */
     EP_TELEGRAM_GET_UPDATES(
-            "Fetch incoming bot updates (messages / chat IDs)",
-            "",
+            "Fetch incoming bot updates (BOT_TOKEN only)",
+            "Returns recent updates for a BOT_TOKEN profile.",
             20
     ),
 
-    /** Telegram 通用 Bot API 方法透传接口：直接将 JSON 负载转发至 /bot<token>/<method> */
+    /** Telegram 通用 Bot API 方法透传接口（仅 BOT_TOKEN 模式） */
     EP_TELEGRAM_CALL_METHOD(
-            "Invoke any Telegram Bot API method directly",
+            "Invoke any Telegram Bot API method directly (BOT_TOKEN only)",
             "Passes JSON payload directly to https://api.telegram.org/bot<token>/<method>.",
             30
+    ),
+
+    /** Telegram 个人账号：列举所有对话/群组/超级群/频道（仅 USER_SESSION 模式） */
+    EP_TELEGRAM_USER_DIALOGS(
+            "List user dialogs, groups, supergroups and channels (USER_SESSION)",
+            "Returns canonical chatId values (e.g. -100... for supergroups/channels, @username, or user ID) and warms the MTProto peer cache.",
+            40
+    ),
+
+    /** Telegram 个人账号：读取指定群组/频道/私聊历史消息（仅 USER_SESSION 模式） */
+    EP_TELEGRAM_USER_HISTORY(
+            "Read message history from a group, channel or private chat (USER_SESSION)",
+            "Supports chatId as numeric ID (-100..., -..., userId), @username, or 'me' for Saved Messages.",
+            50
+    ),
+
+    /** Telegram 个人账号：按关键词搜索群组内或全账号历史消息（仅 USER_SESSION 模式） */
+    EP_TELEGRAM_USER_SEARCH(
+            "Search messages within a chat or globally across all chats (USER_SESSION)",
+            "Omit chatId to search globally across all chats the user account belongs to.",
+            60
+    ),
+
+    /** Telegram 个人账号：编辑已发送消息（仅 USER_SESSION 模式） */
+    EP_TELEGRAM_USER_EDIT(
+            "Edit an existing message in a Telegram chat (USER_SESSION)",
+            "",
+            70
+    ),
+
+    /** Telegram 个人账号：删除一条或多条消息（仅 USER_SESSION 模式） */
+    EP_TELEGRAM_USER_DELETE(
+            "Delete one or more messages in a Telegram chat (USER_SESSION)",
+            "",
+            80
+    ),
+
+    /** Telegram 个人账号：转发消息到另一个聊天（仅 USER_SESSION 模式） */
+    EP_TELEGRAM_USER_FORWARD(
+            "Forward messages from one chat to another (USER_SESSION)",
+            "",
+            90
+    ),
+
+    /** Telegram 个人账号：标记聊天消息已读（仅 USER_SESSION 模式） */
+    EP_TELEGRAM_USER_READ(
+            "Mark messages in a chat/group/channel as read (USER_SESSION)",
+            "",
+            100
+    ),
+
+    /** Telegram 个人账号：解析用户名或聊天实体信息（仅 USER_SESSION 模式） */
+    EP_TELEGRAM_USER_RESOLVE(
+            "Resolve a @username or chatId to entity metadata (USER_SESSION)",
+            "",
+            110
     ),
 
     /** SSH 远程执行 Shell 命令接口：返回 stdout、stderr、exitCode，受命令前缀白名单约束 */
@@ -218,6 +274,45 @@ public enum AiDocMeta {
 
     /** 透传给 Telegram Bot API 方法的可选 JSON 参数对象 */
     FIELD_TELEGRAM_PAYLOAD("Optional JSON parameters for the Bot API method", false, "{}"),
+
+    /** Telegram 个人账号目标会话标识（支持 -100 超级群/频道 ID、@username、me 等） */
+    FIELD_TELEGRAM_USER_CHAT_ID("Target chatId (-100... supergroup/channel, -... group, userId, @username, or 'me')", false, "me"),
+
+    /** Telegram 历史消息分页偏移消息 ID */
+    FIELD_TELEGRAM_OFFSET_ID("Pagination offset message ID (returns messages older than this ID)", false, "0"),
+
+    /** Telegram 历史消息最小消息 ID 过滤 */
+    FIELD_TELEGRAM_MIN_ID("Only return messages with ID greater than minId", false, "0"),
+
+    /** Telegram 历史消息最大消息 ID 过滤 */
+    FIELD_TELEGRAM_MAX_ID("Only return messages with ID less than maxId (or max read ID)", false, "0"),
+
+    /** Telegram 对话列表分页时间偏移（Unix 秒） */
+    FIELD_TELEGRAM_OFFSET_DATE("Unix timestamp pagination offset for dialogs", false, "0"),
+
+    /** Telegram 对话文件夹 ID（0 表示全部，1 表示归档） */
+    FIELD_TELEGRAM_FOLDER_ID("Optional Telegram folder ID (0=default, 1=archived)", false, "0"),
+
+    /** Telegram 消息搜索关键词，必填 */
+    FIELD_TELEGRAM_SEARCH_QUERY("Keyword to search in message history", true, "release"),
+
+    /** Telegram 待编辑的目标消息 ID，必填 */
+    FIELD_TELEGRAM_MESSAGE_ID("Target message ID", true, "123"),
+
+    /** Telegram 待删除或转发的消息 ID 列表，必填 */
+    FIELD_TELEGRAM_MESSAGE_IDS("List of message IDs to delete or forward", true, "[123, 124]"),
+
+    /** 删除普通聊天消息时是否对所有人撤回 */
+    FIELD_TELEGRAM_REVOKE("Whether to revoke messages for everyone in private/basic chats", false, "true"),
+
+    /** 转发来源聊天标识，必填 */
+    FIELD_TELEGRAM_FROM_CHAT_ID("Source chatId to forward messages from", true, "-1001234567890"),
+
+    /** 转发目标聊天标识，必填 */
+    FIELD_TELEGRAM_TO_CHAT_ID("Destination chatId to forward messages to", true, "me"),
+
+    /** 转发时是否隐藏原作者署名 */
+    FIELD_TELEGRAM_DROP_AUTHOR("Hide original author when forwarding", false, "false"),
 
     /** 已启用的 SSH 连接器 Profile ID */
     FIELD_SSH_PROFILE_ID("Enabled SSH connector profile ID", false, ""),

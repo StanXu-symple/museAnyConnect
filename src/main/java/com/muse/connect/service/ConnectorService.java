@@ -178,8 +178,16 @@ public class ConnectorService {
                 }
             }
             case TELEGRAM -> {
-                if (!StringUtils.hasText(cfg.getBotToken())) {
+                if (authMode == AuthMode.BOT_TOKEN && !StringUtils.hasText(cfg.getBotToken())) {
                     throw new ConnectorException(HttpStatus.BAD_REQUEST, ExceptionMessageConstants.CONNECTOR_TELEGRAM_BOT_TOKEN_REQUIRED);
+                }
+                if (authMode == AuthMode.USER_SESSION && (
+                        cfg.getTelegramApiId() == null
+                                || cfg.getTelegramApiId() <= 0
+                                || !StringUtils.hasText(cfg.getTelegramApiHash())
+                                || !StringUtils.hasText(cfg.getTelegramSession())
+                )) {
+                    throw new ConnectorException(HttpStatus.BAD_REQUEST, ExceptionMessageConstants.CONNECTOR_TELEGRAM_USER_SESSION_REQUIRED);
                 }
             }
             case SSH -> {

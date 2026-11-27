@@ -24,6 +24,8 @@ public final class ConnectorLabelConstants {
     public static final String AUTH_COOKIE_AUTH = "Web Cookie (auth_token + ct0)";
     /** Telegram Bot Token 认证展示标签 */
     public static final String AUTH_BOT_TOKEN = "Bot API Token";
+    /** Telegram 个人账号 MTProto 会话认证展示标签 */
+    public static final String AUTH_USER_SESSION = "个人账号 MTProto (gotd/td)";
     /** SSH 密码认证展示标签 */
     public static final String AUTH_PASSWORD = "SSH Password";
     /** SSH 私钥认证展示标签 */

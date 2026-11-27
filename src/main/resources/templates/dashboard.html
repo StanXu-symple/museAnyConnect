@@ -16,7 +16,7 @@
         <a class="nav-link active" th:href="@{/}">控制台</a>
         <a class="nav-link" th:href="@{/playground}">在线调试</a>
         <a class="nav-link" th:href="@{/ai-docs}">AI 文档</a>
-        <a class="btn btn-primary btn-sm" th:href="@{/connectors/new(type='X')}">连接器</a>
+        <a class="nav-link" th:href="@{/connectors/new(type='X')}">连接器</a>
         <span th:if="${authEnabled && currentUser != null}" class="nav-user mono" th:text="${currentUser}">admin</span>
         <form th:if="${authEnabled}" class="inline-form" th:action="@{/logout}" method="post">
             <input type="hidden" name="_csrf" th:value="${csrfToken}">
@@ -114,7 +114,7 @@
                         <span th:if="${c.type.name() == 'SSH'}"
                               th:text="${c.config.username + '@' + c.config.host + ':' + (c.config.port != null ? c.config.port : 22)}"></span>
                         <span th:if="${c.type.name() == 'TELEGRAM'}"
-                              th:text="${(c.config.apiBaseUrl != null ? c.config.apiBaseUrl : 'https://api.telegram.org') + (c.config.defaultChatId != null ? ' (chat: ' + c.config.defaultChatId + ')' : '')}"></span>
+                              th:text="${(c.authMode.name() == 'USER_SESSION' ? ('MTProto apiId=' + (c.config.telegramApiId != null ? c.config.telegramApiId : '?') + (c.config.apiBaseUrl != null ? ' @ ' + c.config.apiBaseUrl : '')) : (c.config.apiBaseUrl != null ? c.config.apiBaseUrl : 'https://api.telegram.org')) + (c.config.defaultChatId != null ? ' (chat: ' + c.config.defaultChatId + ')' : '')}"></span>
                         <span th:if="${c.type.name() == 'X'}"
                               th:text="${c.config.apiBaseUrl != null ? c.config.apiBaseUrl : (c.authMode.name() == 'COOKIE_AUTH' ? 'https://x.com' : 'https://api.x.com')}"></span>
                     </td>

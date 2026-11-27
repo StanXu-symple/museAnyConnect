@@ -26,10 +26,14 @@ public class ConnectorConfig {
     private String ct0;
     private String graphqlQueryIds;
 
-    // Telegram 连接器字段
+    // Telegram 连接器字段（Bot API 与个人账号 MTProto）
     private String botToken;
     private String defaultChatId;
     private String parseMode;
+    private Integer telegramApiId;
+    private String telegramApiHash;
+    private String telegramSession;
+    private String telegramBridgeToken;
 
     // SSH 连接器字段
     private String host;
@@ -58,6 +62,10 @@ public class ConnectorConfig {
         copy.botToken = maskIfPresent(this.botToken);
         copy.defaultChatId = this.defaultChatId;
         copy.parseMode = this.parseMode;
+        copy.telegramApiId = this.telegramApiId;
+        copy.telegramApiHash = maskIfPresent(this.telegramApiHash);
+        copy.telegramSession = maskIfPresent(this.telegramSession);
+        copy.telegramBridgeToken = maskIfPresent(this.telegramBridgeToken);
         copy.host = this.host;
         copy.port = this.port;
         copy.username = this.username;
@@ -80,6 +88,9 @@ public class ConnectorConfig {
         this.authToken = pickSecret(this.authToken, existing.authToken);
         this.ct0 = pickSecret(this.ct0, existing.ct0);
         this.botToken = pickSecret(this.botToken, existing.botToken);
+        this.telegramApiHash = pickSecret(this.telegramApiHash, existing.telegramApiHash);
+        this.telegramSession = pickSecret(this.telegramSession, existing.telegramSession);
+        this.telegramBridgeToken = pickSecret(this.telegramBridgeToken, existing.telegramBridgeToken);
         this.password = pickSecret(this.password, existing.password);
         this.privateKey = pickSecret(this.privateKey, existing.privateKey);
         this.passphrase = pickSecret(this.passphrase, existing.passphrase);
@@ -214,6 +225,38 @@ public class ConnectorConfig {
 
     public void setParseMode(String parseMode) {
         this.parseMode = trimToNull(parseMode);
+    }
+
+    public Integer getTelegramApiId() {
+        return telegramApiId;
+    }
+
+    public void setTelegramApiId(Integer telegramApiId) {
+        this.telegramApiId = telegramApiId;
+    }
+
+    public String getTelegramApiHash() {
+        return telegramApiHash;
+    }
+
+    public void setTelegramApiHash(String telegramApiHash) {
+        this.telegramApiHash = trimToNull(telegramApiHash);
+    }
+
+    public String getTelegramSession() {
+        return telegramSession;
+    }
+
+    public void setTelegramSession(String telegramSession) {
+        this.telegramSession = trimToNull(telegramSession);
+    }
+
+    public String getTelegramBridgeToken() {
+        return telegramBridgeToken;
+    }
+
+    public void setTelegramBridgeToken(String telegramBridgeToken) {
+        this.telegramBridgeToken = trimToNull(telegramBridgeToken);
     }
 
     public String getHost() {

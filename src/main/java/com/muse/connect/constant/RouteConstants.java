@@ -48,6 +48,10 @@ public final class RouteConstants {
     public static final String API_CONNECTOR_EXPORT = "/connectors/export";
     /** 连接器导入路径 */
     public static final String API_CONNECTOR_IMPORT = "/connectors/import";
+    /** Telegram 个人账号交互登录：发送验证码 */
+    public static final String API_TELEGRAM_AUTH_START = "/connectors/telegram/auth/start";
+    /** Telegram 个人账号交互登录：提交验证码/2FA 密码 */
+    public static final String API_TELEGRAM_AUTH_VERIFY = "/connectors/telegram/auth/verify";
     /** 系统统计信息路径 */
     public static final String API_STATS = "/stats";
 
@@ -73,12 +77,28 @@ public final class RouteConstants {
 
     /** Telegram 中转控制器基础路径 */
     public static final String API_RELAY_TELEGRAM_BASE = "/api/relay/telegram/{profileId}";
-    /** Telegram 发送消息子路径 */
+    /** Telegram 发送消息子路径（Bot 与个人账号通用） */
     public static final String TELEGRAM_SEND = "/send";
-    /** Telegram 拉取更新子路径 */
+    /** Telegram 拉取更新子路径（Bot 模式） */
     public static final String TELEGRAM_UPDATES = "/updates";
-    /** Telegram 通用方法透传子路径 */
+    /** Telegram 通用方法透传子路径（Bot 模式） */
     public static final String TELEGRAM_METHOD = "/method/{method}";
+    /** Telegram 个人账号：获取对话/群组/频道列表 */
+    public static final String TELEGRAM_DIALOGS = "/dialogs";
+    /** Telegram 个人账号：读取聊天历史消息 */
+    public static final String TELEGRAM_HISTORY = "/history";
+    /** Telegram 个人账号：搜索群组或全局消息 */
+    public static final String TELEGRAM_SEARCH = "/search";
+    /** Telegram 个人账号：编辑消息 */
+    public static final String TELEGRAM_EDIT = "/edit";
+    /** Telegram 个人账号：删除消息 */
+    public static final String TELEGRAM_DELETE = "/delete";
+    /** Telegram 个人账号：转发消息 */
+    public static final String TELEGRAM_FORWARD = "/forward";
+    /** Telegram 个人账号：标记已读 */
+    public static final String TELEGRAM_READ = "/read";
+    /** Telegram 个人账号：解析用户名或会话 */
+    public static final String TELEGRAM_RESOLVE = "/resolve";
 
     /** SSH 中转控制器基础路径 */
     public static final String API_RELAY_SSH_BASE = "/api/relay/ssh/{profileId}";
@@ -163,6 +183,8 @@ public final class RouteConstants {
     public static final String DEFAULT_X_MAX_RESULTS = "10";
     /** Telegram 拉取更新默认条数 */
     public static final String DEFAULT_TELEGRAM_LIMIT = "20";
+    /** Telegram 个人账号对话列表默认条数 */
+    public static final String DEFAULT_TELEGRAM_DIALOGS_LIMIT = "30";
     /** Telegram 长轮询默认超时秒数 */
     public static final String DEFAULT_TELEGRAM_TIMEOUT = "0";
     /** 控制台导入表单参数名 */

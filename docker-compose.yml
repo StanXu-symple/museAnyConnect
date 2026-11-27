@@ -1,8 +1,21 @@
 services:
+  # Telegram 个人账号 MTProto (gotd/td) 极简侧车服务（仅暴露给内部 Docker 网络，不对外映射端口）
+  tg-user-bridge:
+    image: ghcr.io/stanxu-symple/museanyconnect-tg-bridge:latest
+    build:
+      context: ./tg-user-bridge
+    container_name: muse-tg-user-bridge
+    restart: unless-stopped
+    environment:
+      TG_BRIDGE_PORT: 8081
+      TG_BRIDGE_TOKEN: ${MUSE_TELEGRAM_BRIDGE_TOKEN:-muse-tg-bridge-internal}
+
   muse-any-connect:
     image: ghcr.io/stanxu-symple/museanyconnect:latest
     container_name: muse-any-connect
     restart: unless-stopped
+    depends_on:
+      - tg-user-bridge
     ports:
       - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
     volumes:
@@ -16,6 +29,8 @@ services:
       MUSE_AUTH_SESSION_TTL_MINUTES: ${MUSE_AUTH_SESSION_TTL_MINUTES:-720}
       MUSE_ALLOW_RAW_EXPORT: ${MUSE_ALLOW_RAW_EXPORT:-true}
       MUSE_RELAY_API_KEY: ${MUSE_RELAY_API_KEY:-123456789}
+      MUSE_TELEGRAM_BRIDGE_URL: ${MUSE_TELEGRAM_BRIDGE_URL:-http://tg-user-bridge:8081}
+      MUSE_TELEGRAM_BRIDGE_TOKEN: ${MUSE_TELEGRAM_BRIDGE_TOKEN:-muse-tg-bridge-internal}
       MUSE_DEFAULT_TIMEOUT_MS: ${MUSE_DEFAULT_TIMEOUT_MS:-15000}
       MUSE_ACTIVITY_BUFFER_SIZE: ${MUSE_ACTIVITY_BUFFER_SIZE:-100}
       JAVA_OPTS: ${JAVA_OPTS:--Xms32m -Xmx128m}

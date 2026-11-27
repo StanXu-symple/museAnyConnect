@@ -79,7 +79,10 @@ public final class ExceptionMessageConstants {
     /** X Cookie 凭据必填 */
     public static final String CONNECTOR_X_COOKIE_REQUIRED = "authToken and ct0 are required for X COOKIE_AUTH";
     /** Telegram Bot Token 必填 */
-    public static final String CONNECTOR_TELEGRAM_BOT_TOKEN_REQUIRED = "botToken is required for Telegram";
+    public static final String CONNECTOR_TELEGRAM_BOT_TOKEN_REQUIRED = "botToken is required for Telegram BOT_TOKEN";
+    /** Telegram 个人账号 MTProto 凭据必填 */
+    public static final String CONNECTOR_TELEGRAM_USER_SESSION_REQUIRED =
+            "telegramApiId, telegramApiHash and telegramSession are required for Telegram USER_SESSION";
     /** SSH 主机与用户名必填 */
     public static final String CONNECTOR_SSH_HOST_USER_REQUIRED = "host and username are required for SSH";
     /** SSH 密码认证必填 */
@@ -168,6 +171,29 @@ public final class ExceptionMessageConstants {
     public static final String TELEGRAM_API_ERROR = "Telegram API returned error";
     /** Telegram 中转异常失败前缀 */
     public static final String TELEGRAM_RELAY_FAILED_PREFIX = "Telegram relay failed: ";
+    /** Telegram 个人账号模式专用接口提示 */
+    public static final String TELEGRAM_USER_SESSION_ONLY =
+            "This endpoint requires a Telegram USER_SESSION (MTProto) connector profile";
+    /** Telegram Bot 模式专用接口提示 */
+    public static final String TELEGRAM_BOT_TOKEN_ONLY =
+            "This endpoint requires a Telegram BOT_TOKEN connector profile";
+    /** Telegram 个人账号 MTProto 凭据缺失 */
+    public static final String TELEGRAM_USER_CREDENTIALS_MISSING =
+            "Telegram USER_SESSION credentials (telegramApiId, telegramApiHash, telegramSession) are incomplete";
+    /** Telegram 消息 ID 必填 */
+    public static final String TELEGRAM_MESSAGE_ID_REQUIRED = "messageId must be a positive integer";
+    /** Telegram 消息 ID 列表必填 */
+    public static final String TELEGRAM_MESSAGE_IDS_REQUIRED = "messageIds must not be empty";
+    /** Telegram 搜索关键词必填 */
+    public static final String TELEGRAM_SEARCH_QUERY_REQUIRED = "Search query is required";
+    /** Telegram 转发来源和目标会话必填 */
+    public static final String TELEGRAM_FORWARD_CHATS_REQUIRED = "fromChatId and toChatId are required for forwarding";
+    /** Telegram 桥接服务返回错误前缀 */
+    public static final String TELEGRAM_BRIDGE_ERROR_PREFIX = "Telegram user bridge returned error: ";
+    /** Telegram 交互登录必填参数校验 */
+    public static final String TELEGRAM_AUTH_START_REQUIRED = "apiId, apiHash and phone are required";
+    /** Telegram 交互登录校验参数缺失 */
+    public static final String TELEGRAM_AUTH_VERIFY_REQUIRED = "loginId is required";
 
     // =========================================================================
     // 6. SSH / SFTP 中转异常消息

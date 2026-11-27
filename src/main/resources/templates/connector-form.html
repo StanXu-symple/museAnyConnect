@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" th:content="${csrfToken}">
     <title th:text="${editing ? '编辑连接器' : '新建连接器'} + ' - MuseAnyConnect'">配置连接器</title>
     <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
@@ -16,6 +17,7 @@
         <a class="nav-link" th:href="@{/}">控制台</a>
         <a class="nav-link" th:href="@{/playground}">在线调试</a>
         <a class="nav-link" th:href="@{/ai-docs}">AI 文档</a>
+        <a class="nav-link active" th:href="@{/connectors/new(type='X')}">连接器</a>
         <span th:if="${authEnabled && currentUser != null}" class="nav-user mono" th:text="${currentUser}">admin</span>
         <form th:if="${authEnabled}" class="inline-form" th:action="@{/logout}" method="post">
             <input type="hidden" name="_csrf" th:value="${csrfToken}">
@@ -205,29 +207,84 @@
                 </details>
             </div>
 
-            <!-- Telegram 机器人配置 -->
+            <!-- Telegram 配置（支持 Bot API 与个人账号 MTProto 两种认证模式） -->
             <div id="section-telegram" class="section-box hidden">
-                <h3 class="section-title">Telegram Bot API 配置</h3>
-                <div class="form-grid">
+                <h3 class="section-title">Telegram 连接配置</h3>
+
+                <!-- Telegram Bot API 专属配置 -->
+                <div id="section-telegram-bot" class="hidden">
                     <div class="form-group">
                         <label for="botToken">Bot Token *</label>
                         <input id="botToken" type="text" class="form-control mono" th:field="*{config.botToken}" placeholder="123456:ABC-DEF...">
                     </div>
+                </div>
+
+                <!-- Telegram 个人账号 MTProto (gotd/td) 专属配置 -->
+                <div id="section-telegram-user" class="hidden">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="telegramApiId">App api_id *</label>
+                            <input id="telegramApiId" type="number" class="form-control mono" th:field="*{config.telegramApiId}" placeholder="从 my.telegram.org 获取的数字 ID">
+                        </div>
+                        <div class="form-group">
+                            <label for="telegramApiHash">App api_hash *</label>
+                            <input id="telegramApiHash" type="text" class="form-control mono" th:field="*{config.telegramApiHash}" placeholder="32 位十六进制 api_hash">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="telegramSession">个人账号 Session 字符串 (tg_sess_v1:...) *</label>
+                        <textarea id="telegramSession" class="form-control mono" th:field="*{config.telegramSession}" placeholder="tg_sess_v1:...（可直接使用下方在线登录工具一键生成）"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="telegramBridgeToken">侧车鉴权令牌 X-Bridge-Token（可选，留空沿用全局 MUSE_TELEGRAM_BRIDGE_TOKEN）</label>
+                        <input id="telegramBridgeToken" type="password" class="form-control mono" th:field="*{config.telegramBridgeToken}" placeholder="与 tg-user-bridge 的 TG_BRIDGE_TOKEN 保持一致">
+                    </div>
+
+                    <!-- 在线交互式登录生成 Session 字符串工具 -->
+                    <div class="section-box" style="margin: 12px 0; background: #f8fafc;">
+                        <h4 class="section-title" style="margin-bottom: 8px;">🔐 在线登录个人账号（自动生成 Session 字符串）</h4>
+                        <p class="muted" style="margin-top: 0; margin-bottom: 10px;">
+                            先填写上方 <span class="mono">api_id</span> 与 <span class="mono">api_hash</span>（若需代理可先填下方代理主机/端口），输入带国际区号的手机号获取验证码，校验成功后会自动回填到上方 Session 输入框。
+                        </p>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="tgAuthPhone">手机号（含国际区号）</label>
+                                <input id="tgAuthPhone" type="text" class="form-control mono" placeholder="例如 +8613800138000">
+                            </div>
+                            <div class="form-group">
+                                <label for="tgAuthCode">收到的登录验证码</label>
+                                <input id="tgAuthCode" type="text" class="form-control mono" placeholder="在 Telegram 客户端查收 5 位数字">
+                            </div>
+                            <div class="form-group">
+                                <label for="tgAuthPassword">两步验证云密码（未开启 2FA 请留空）</label>
+                                <input id="tgAuthPassword" type="password" class="form-control mono" placeholder="可选 2FA Password">
+                            </div>
+                        </div>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm" onclick="startTelegramUserLogin()">1. 发送验证码</button>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="verifyTelegramUserLogin()">2. 提交验证并填充 Session</button>
+                        </div>
+                        <div id="tgAuthStatus" class="muted" style="margin-top: 8px;"></div>
+                    </div>
+                </div>
+
+                <!-- Bot 与个人账号共用字段 -->
+                <div class="form-grid">
                     <div class="form-group">
                         <label for="defaultChatId">默认 Chat ID（可选）</label>
-                        <input id="defaultChatId" type="text" class="form-control mono" th:field="*{config.defaultChatId}" placeholder="例如 -1001234567890">
+                        <input id="defaultChatId" type="text" class="form-control mono" th:field="*{config.defaultChatId}" placeholder="例如 -1001234567890 / @username / me">
                     </div>
                     <div class="form-group">
                         <label for="parseMode">默认 Parse Mode（可选）</label>
                         <select id="parseMode" class="form-control" th:field="*{config.parseMode}">
                             <option value="">Plain Text</option>
                             <option value="HTML">HTML</option>
-                            <option value="MarkdownV2">MarkdownV2</option>
+                            <option value="MarkdownV2">MarkdownV2（仅 Bot 模式）</option>
                         </select>
                     </div>
                 </div>
 
-                <details class="guide-box" th:attr="open=${!editing ? 'open' : null}">
+                <details id="guide-telegram-bot" class="guide-box hidden" th:attr="open=${!editing ? 'open' : null}">
                     <summary class="guide-summary">📖 获取教程：如何拿到 Telegram Bot Token 与 Chat ID</summary>
                     <div class="guide-body">
                         <ol class="guide-steps">
@@ -237,6 +294,23 @@
                         </ol>
                         <div class="guide-tip">
                             <strong>网络提示：</strong>若部署服务器无法直连 <span class="inline-code">api.telegram.org</span>，可在下方“通用网络与超时参数”配置 HTTP 代理或反代 Base URL。
+                        </div>
+                    </div>
+                </details>
+
+                <details id="guide-telegram-user" class="guide-box hidden" th:attr="open=${!editing ? 'open' : null}">
+                    <summary class="guide-summary">📖 获取教程：如何配置个人账号 MTProto（gotd/td 侧车）</summary>
+                    <div class="guide-body">
+                        <ol class="guide-steps">
+                            <li>登录官方开发页 <a href="https://my.telegram.org/apps" target="_blank" rel="noopener noreferrer">my.telegram.org/apps</a>，创建一个应用后获取 <span class="inline-code">App api_id</span> 与 <span class="inline-code">App api_hash</span>。</li>
+                            <li>确认 <span class="inline-code">tg-user-bridge</span>（基于 Go <span class="inline-code">gotd/td</span> 的轻量侧车容器）已启动；使用 <span class="inline-code">docker compose up -d</span> 时默认已自动连通，无需手填下方 Base URL。</li>
+                            <li>使用上方“在线登录个人账号”区域发送验证码并校验，成功后会自动填充 <span class="inline-code">tg_sess_v1:...</span> 会话字符串；保存配置后即可持久化存储在 SQLite 中，重启免重复验证码登录。</li>
+                            <li>保存后可在 <strong>在线调试</strong> 中先调用 <span class="inline-code">GET /dialogs</span> 列出所有群组/频道的 <span class="inline-code">chatId</span>，再调用 <span class="inline-code">GET /history</span> 读群消息、<span class="inline-code">POST /send</span> 发/回复消息、<span class="inline-code">GET /search</span> 搜消息等全部能力。</li>
+                        </ol>
+                        <div class="guide-note">
+                            <strong>风控与代理提示：</strong>
+                            <br>• 个人账号支持在下方代理主机填写 <span class="inline-code">127.0.0.1</span>（默认 HTTP CONNECT 代理）或 <span class="inline-code">socks5://127.0.0.1</span>（SOCKS5 代理），由侧车服务直连该代理访问 Telegram MTProto 节点。
+                            <br>• 请妥善保存 Session 字符串避免频繁重新验证码登录，并控制群消息读取/发送频率，避免触发 Telegram 的 <span class="inline-code">FLOOD_WAIT</span> 限流。
                         </div>
                     </div>
                 </details>
@@ -359,6 +433,10 @@ function syncFormFields() {
     toggle('section-x-oauth1a', type === 'X' && mode === 'OAUTH1A');
     toggle('section-x-cookie', type === 'X' && mode === 'COOKIE_AUTH');
     toggle('section-telegram', type === 'TELEGRAM');
+    toggle('section-telegram-bot', type === 'TELEGRAM' && mode === 'BOT_TOKEN');
+    toggle('section-telegram-user', type === 'TELEGRAM' && mode === 'USER_SESSION');
+    toggle('guide-telegram-bot', type === 'TELEGRAM' && mode === 'BOT_TOKEN');
+    toggle('guide-telegram-user', type === 'TELEGRAM' && mode === 'USER_SESSION');
     toggle('section-ssh', type === 'SSH');
     toggle('section-ssh-password', type === 'SSH' && mode === 'PASSWORD');
     toggle('section-ssh-key', type === 'SSH' && mode === 'PRIVATE_KEY');
@@ -371,11 +449,102 @@ function syncFormFields() {
     if (baseUrlInput) {
         if (type === 'X' && mode === 'COOKIE_AUTH') {
             baseUrlInput.placeholder = 'https://x.com 或反代地址';
+        } else if (type === 'TELEGRAM' && mode === 'USER_SESSION') {
+            baseUrlInput.placeholder = '留空走默认 gotd/td 侧车地址（如 http://tg-user-bridge:8081）';
         } else if (type === 'TELEGRAM') {
             baseUrlInput.placeholder = 'https://api.telegram.org 或反代地址';
         } else {
             baseUrlInput.placeholder = 'https://api.x.com 或反代地址';
         }
+    }
+}
+
+let tgPendingLoginId = '';
+
+function buildCsrfHeaders() {
+    const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta && csrfMeta.content) {
+        headers['X-CSRF-Token'] = csrfMeta.content;
+    }
+    return headers;
+}
+
+// 发起 Telegram 个人账号验证码登录
+async function startTelegramUserLogin() {
+    const statusEl = document.getElementById('tgAuthStatus');
+    const apiId = parseInt(document.getElementById('telegramApiId').value || '0', 10);
+    const apiHash = (document.getElementById('telegramApiHash').value || '').trim();
+    const phone = (document.getElementById('tgAuthPhone').value || '').trim();
+    const bridgeUrl = (document.getElementById('apiBaseUrl').value || '').trim();
+    const bridgeToken = (document.getElementById('telegramBridgeToken').value || '').trim();
+    const proxyHost = (document.getElementById('proxyHost').value || '').trim();
+    const proxyPort = parseInt(document.getElementById('proxyPort').value || '0', 10) || null;
+
+    if (!apiId || !apiHash || !phone) {
+        statusEl.textContent = '请先填写 api_id、api_hash 和带国际区号的手机号。';
+        return;
+    }
+    statusEl.textContent = '正在向 Telegram 发送登录验证码...';
+    try {
+        const res = await fetch('/api/connectors/telegram/auth/start', {
+            method: 'POST',
+            headers: buildCsrfHeaders(),
+            body: JSON.stringify({ apiId, apiHash, phone, bridgeUrl, bridgeToken, proxyHost, proxyPort })
+        });
+        const data = await res.json();
+        if (!res.ok || data.ok === false) {
+            statusEl.textContent = '发送失败：' + (data.error || ('HTTP ' + res.status));
+            return;
+        }
+        const result = data.result || data;
+        tgPendingLoginId = result.loginId || '';
+        statusEl.textContent = '验证码已发送！请在 Telegram 客户端查收验证码并点击“2. 提交验证并填充 Session”。';
+    } catch (err) {
+        statusEl.textContent = '请求异常：' + String(err);
+    }
+}
+
+// 提交验证码（及可选 2FA 云密码）换取持久化 Session 字符串
+async function verifyTelegramUserLogin() {
+    const statusEl = document.getElementById('tgAuthStatus');
+    const code = (document.getElementById('tgAuthCode').value || '').trim();
+    const password = document.getElementById('tgAuthPassword').value || '';
+    const bridgeUrl = (document.getElementById('apiBaseUrl').value || '').trim();
+    const bridgeToken = (document.getElementById('telegramBridgeToken').value || '').trim();
+
+    if (!tgPendingLoginId) {
+        statusEl.textContent = '请先点击“1. 发送验证码”。';
+        return;
+    }
+    statusEl.textContent = '正在校验登录凭据...';
+    try {
+        const res = await fetch('/api/connectors/telegram/auth/verify', {
+            method: 'POST',
+            headers: buildCsrfHeaders(),
+            body: JSON.stringify({ loginId: tgPendingLoginId, code, password, bridgeUrl, bridgeToken })
+        });
+        const data = await res.json();
+        if (!res.ok || data.ok === false) {
+            statusEl.textContent = '校验失败：' + (data.error || ('HTTP ' + res.status));
+            return;
+        }
+        const result = data.result || data;
+        if (result.status === 'WAIT_PASSWORD') {
+            statusEl.textContent = '当前账号已开启两步验证，请输入上方“两步验证云密码”后再次点击提交。';
+            return;
+        }
+        if (result.sessionString) {
+            document.getElementById('telegramSession').value = result.sessionString;
+            const u = result.user || {};
+            const who = u.username ? ('@' + u.username) : (u.firstName || u.id || '');
+            tgPendingLoginId = '';
+            statusEl.textContent = '登录成功' + (who ? ('（' + who + '）') : '') + '！Session 字符串已自动填入上方，请点击页面底部“保存配置”。';
+        } else {
+            statusEl.textContent = '登录响应缺少 sessionString，请检查侧车日志。';
+        }
+    } catch (err) {
+        statusEl.textContent = '请求异常：' + String(err);
     }
 }
 

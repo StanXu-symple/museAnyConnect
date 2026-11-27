@@ -17,6 +17,7 @@
         <a class="nav-link" th:href="@{/}">控制台</a>
         <a class="nav-link active" th:href="@{/playground}">在线调试</a>
         <a class="nav-link" th:href="@{/ai-docs}">AI 文档</a>
+        <a class="nav-link" th:href="@{/connectors/new(type='X')}">连接器</a>
         <span th:if="${authEnabled && currentUser != null}" class="nav-user mono" th:text="${currentUser}">admin</span>
         <form th:if="${authEnabled}" class="inline-form" th:action="@{/logout}" method="post">
             <input type="hidden" name="_csrf" th:value="${csrfToken}">
@@ -43,9 +44,9 @@
                     <select id="profileSelect" class="form-control" onchange="onProfileChange()">
                         <option th:each="c : ${connectors}"
                                 th:value="${c.id}"
-                                th:attr="data-type=${c.type.name()}"
+                                th:attr="data-type=${c.type.name()},data-auth-mode=${c.authMode.name()}"
                                 th:selected="${selectedProfileId != null && selectedProfileId == c.id}"
-                                th:text="${c.name + ' [' + c.type.name() + ' / ' + c.id + ']' + (c.enabled ? '' : ' (已停用)')}">
+                                th:text="${c.name + ' [' + c.type.name() + ' / ' + c.authMode.name() + ' / ' + c.id + ']' + (c.enabled ? '' : ' (已停用)')}">
                         </option>
                     </select>
                 </div>
@@ -120,7 +121,7 @@ const TEMPLATES = {
             body: JSON.stringify({ method: 'GET', path: '/2/users/me', queryParams: {} }, null, 2)
         }
     ],
-    TELEGRAM: [
+    TELEGRAM_BOT_TOKEN: [
         {
             name: '发送消息 (POST /send)',
             method: 'POST',
@@ -138,6 +139,62 @@ const TEMPLATES = {
             method: 'POST',
             path: '/api/relay/telegram/{id}/method/getMe',
             body: '{}'
+        }
+    ],
+    TELEGRAM_USER_SESSION: [
+        {
+            name: '获取所有对话/群组/频道 (GET /dialogs)',
+            method: 'GET',
+            path: '/api/relay/telegram/{id}/dialogs?limit=30',
+            body: ''
+        },
+        {
+            name: '读取群组/私聊历史消息 (GET /history)',
+            method: 'GET',
+            path: '/api/relay/telegram/{id}/history?chatId=me&limit=20',
+            body: ''
+        },
+        {
+            name: '发送或回复消息 (POST /send)',
+            method: 'POST',
+            path: '/api/relay/telegram/{id}/send',
+            body: JSON.stringify({ chatId: 'me', text: 'Hello from Muse User Account!', parseMode: 'HTML', replyToMessageId: null }, null, 2)
+        },
+        {
+            name: '搜索群组或全局消息 (GET /search)',
+            method: 'GET',
+            path: '/api/relay/telegram/{id}/search?query=hello&limit=20',
+            body: ''
+        },
+        {
+            name: '编辑已发送消息 (POST /edit)',
+            method: 'POST',
+            path: '/api/relay/telegram/{id}/edit',
+            body: JSON.stringify({ chatId: 'me', messageId: 1, text: 'Updated message text', parseMode: 'HTML' }, null, 2)
+        },
+        {
+            name: '删除消息 (POST /delete)',
+            method: 'POST',
+            path: '/api/relay/telegram/{id}/delete',
+            body: JSON.stringify({ chatId: 'me', messageIds: [1], revoke: true }, null, 2)
+        },
+        {
+            name: '转发消息 (POST /forward)',
+            method: 'POST',
+            path: '/api/relay/telegram/{id}/forward',
+            body: JSON.stringify({ fromChatId: '-1001234567890', toChatId: 'me', messageIds: [1], dropAuthor: false }, null, 2)
+        },
+        {
+            name: '标记消息已读 (POST /read)',
+            method: 'POST',
+            path: '/api/relay/telegram/{id}/read',
+            body: JSON.stringify({ chatId: '-1001234567890', maxId: 0 }, null, 2)
+        },
+        {
+            name: '解析 @username / 会话信息 (GET /resolve)',
+            method: 'GET',
+            path: '/api/relay/telegram/{id}/resolve?chatId=@telegram',
+            body: ''
         }
     ],
     SSH: [
@@ -162,13 +219,19 @@ const TEMPLATES = {
     ]
 };
 
+function resolveTemplates(opt) {
+    const type = opt.dataset.type;
+    const authMode = opt.dataset.authMode || '';
+    return TEMPLATES[type + '_' + authMode] || TEMPLATES[type] || [];
+}
+
 function onProfileChange() {
     const sel = document.getElementById('profileSelect');
     if (!sel || !sel.selectedOptions.length) return;
-    const type = sel.selectedOptions[0].dataset.type;
+    const list = resolveTemplates(sel.selectedOptions[0]);
     const actionSelect = document.getElementById('actionSelect');
     actionSelect.innerHTML = '';
-    (TEMPLATES[type] || []).forEach((tpl, idx) => {
+    list.forEach((tpl, idx) => {
         const opt = document.createElement('option');
         opt.value = idx;
         opt.textContent = tpl.name;
@@ -180,9 +243,8 @@ function onProfileChange() {
 function onActionChange() {
     const sel = document.getElementById('profileSelect');
     const profileId = sel.value;
-    const type = sel.selectedOptions[0].dataset.type;
     const idx = parseInt(document.getElementById('actionSelect').value || '0', 10);
-    const tpl = (TEMPLATES[type] || [])[idx];
+    const tpl = resolveTemplates(sel.selectedOptions[0])[idx];
     if (!tpl) return;
     document.getElementById('httpMethodInput').value = tpl.method;
     document.getElementById('endpointInput').value = tpl.path.replace('{id}', profileId);

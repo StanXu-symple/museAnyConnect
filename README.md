@@ -3,7 +3,7 @@
 **MuseAnyConnect** 是专为 **Muse** 设计的轻量级 HTTP 中转服务（Relay Gateway），基于 **JDK 17 + Spring Boot 3.5 + SQLite 持久化数据库 + Thymeleaf** 构建，将外部平台与远程主机能力统一封装为标准 HTTP REST 接口：
 
 - **X (Twitter) 连接器**：支持 Bearer Token（OAuth 2.0 App-Only / User Token）、OAuth 1.0a（HMAC-SHA1 自动签名）与普通用户网页 Cookie（`auth_token` + `ct0`），支持通用转发以及发推、搜索、用户查询等快捷接口。
-- **Telegram 连接器**：支持 Bot API Token 与可选代理转发，支持快捷发送消息、拉取更新以及任意 Bot API 方法透传。
+- **Telegram 连接器**：同时支持 **Bot API Token（`BOT_TOKEN`）** 与 **个人账号 MTProto（`USER_SESSION`，基于 Go `gotd/td` 极简侧车）**，除机器人收发外，支持直接以个人账号列举所有群组/频道、读取群历史消息、搜索消息、发送/回复/编辑/删除/转发消息与标记已读。
 - **SSH 远程服务器连接器**：基于 JSch 支持密码认证与私钥（RSA / Ed25519 / ECDSA）认证，提供 HTTP 命令执行与 SFTP 文件读写接口。
 - **Thymeleaf 管理控制台**：轻量级服务端渲染界面，无需 Node/前端构建，支持连接配置增删改查、连通性测试、配置 JSON 导入/导出、在线调试（Playground）与 curl 生成、面向注解的 AI 文档预览，以及实时 SQLite 存储与 JVM 内存监控。
 
@@ -17,6 +17,7 @@
 | 框架 | Spring Boot 3.5.11 | Web + Thymeleaf + JDBC（不使用 JPA/Hibernate 以降低内存占用） |
 | 数据库 | SQLite (`sqlite-jdbc`) | 单文件嵌入式持久化（WAL 模式），挂载数据卷后重启不丢配置 |
 | SSH 引擎 | `com.github.mwiede:jsch` 0.2.21 | 轻量单包，支持现代 OpenSSH 密钥算法 |
+| Telegram 个人账号侧车 | Go 1.22 + `gotd/td` (`tg-user-bridge/`) | 约 15~20MB 静态镜像，支持无状态 `StringSession`、HTTP/SOCKS5 代理与 MTProto 全能力 |
 | 前端界面 | Thymeleaf + 原生 CSS/JS | 零构建步骤，开箱即用 |
 
 ### 目录结构
@@ -116,6 +117,8 @@ java -Xms32m -Xmx128m -jar target/muse-any-connect-0.1.0-SNAPSHOT.jar
 | `muse.auth.lockout-minutes` | `MUSE_AUTH_LOCKOUT_MINUTES` | `15` | 触发防爆破锁定后的冷却时间（分钟） |
 | `muse.auth.allow-raw-export` | `MUSE_ALLOW_RAW_EXPORT` | `true` | 是否允许导出含明文凭据的连接器 JSON（生产可设为 `false` 禁用） |
 | `muse.relay.api-key` | `MUSE_RELAY_API_KEY` | `123456789`（兜底默认值） | 机器调用 `/api/**` 请求头 `X-Muse-Key` 校验密钥（未配置或留空时兜底为 `123456789`） |
+| `muse.relay.telegram-bridge-url` | `MUSE_TELEGRAM_BRIDGE_URL` | `http://127.0.0.1:8081` | Telegram 个人账号 `gotd/td` 侧车服务默认地址（Compose 默认 `http://tg-user-bridge:8081`） |
+| `muse.relay.telegram-bridge-token` | `MUSE_TELEGRAM_BRIDGE_TOKEN` | `""` | 可选：调用侧车时附带的 `X-Bridge-Token` 共享鉴权密钥 |
 | `muse.relay.default-timeout-ms` | `MUSE_DEFAULT_TIMEOUT_MS` | `15000` | 外部请求默认超时（毫秒） |
 | `muse.relay.activity-buffer-size` | `MUSE_ACTIVITY_BUFFER_SIZE` | `100` | JVM 环形日志最大条数 |
 
@@ -193,8 +196,13 @@ docker run -d --name muse-any-connect -p 8080:8080 muse-any-connect:local
 ### 4.2 Telegram
 - **认证方式 (`authMode`)**：
   - `BOT_TOKEN`：标准 Bot API 模式，自动拼接 `https://api.telegram.org/bot<botToken>/<method>`。
-- **如何获取**：在 Telegram 联系 `@BotFather` 发送 `/newbot` 获取 Bot Token；向机器人发消息后调用 `GET /updates` 从 `message.chat.id` 获取私聊或群组 Chat ID。
-- **支持字段**：`apiBaseUrl`（默认 `https://api.telegram.org`）、`botToken`、`defaultChatId`、`parseMode`（`MarkdownV2` / `HTML` / 空）、`proxyHost`、`proxyPort`、`timeoutMs`。
+  - `USER_SESSION`：个人账号 MTProto 模式（基于仓库内置的 Go `gotd/td` 侧车 `tg-user-bridge/`），通过单行 `tg_sess_v1:...` 会话字符串持久复用登录态，支持读取任意已加入群组/频道的历史消息、搜索、发/回/改/删/转发消息等完整客户端能力。
+- **如何获取**：
+  - **Bot Token**：在 Telegram 联系 `@BotFather` 发送 `/newbot` 获取 Bot Token；向机器人发消息后调用 `GET /updates` 从 `message.chat.id` 获取 Chat ID。
+  - **个人账号 (`USER_SESSION`)**：登录 `https://my.telegram.org/apps` 申请 `api_id` 与 `api_hash` → 通过 `docker compose up -d` 同时启动 `tg-user-bridge` 侧车 → 在控制台新建 Telegram（`USER_SESSION`）连接器页面直接使用内置**“在线登录个人账号”**工具收验证码（含可选 2FA）并自动回填 `telegramSession`。
+- **支持字段**：
+  - Bot 模式：`apiBaseUrl`（默认 `https://api.telegram.org`）、`botToken`、`defaultChatId`、`parseMode`（`MarkdownV2` / `HTML` / 空）、`proxyHost`、`proxyPort`、`timeoutMs`。
+  - 个人账号模式：`apiBaseUrl`（留空走 `MUSE_TELEGRAM_BRIDGE_URL`）、`telegramApiId`、`telegramApiHash`、`telegramSession`、`telegramBridgeToken`、`defaultChatId`、`parseMode`（`HTML` / 空）、`proxyHost`（默认 HTTP CONNECT，填 `socks5://host` 支持 SOCKS5）、`proxyPort`、`timeoutMs`。
 
 ### 4.3 SSH 远程服务器
 - **认证方式 (`authMode`)**：
@@ -239,17 +247,31 @@ docker run -d --name muse-any-connect -p 8080:8080 muse-any-connect:local
 - `GET /api/relay/x/{profileId}/users/by/username/{username}` — 快捷用户信息查询
 
 ### 5.3 Telegram 中转接口 (`/api/relay/telegram/{profileId}`)
-- `POST /api/relay/telegram/{profileId}/send` — 快捷发送文本消息
+- `POST /api/relay/telegram/{profileId}/send` — 快捷发送或回复文本消息（**`BOT_TOKEN` 与 `USER_SESSION` 通用**）
   ```json
   {
-    "chatId": "123456789",
+    "chatId": "-1001234567890",
     "text": "Muse notification",
     "parseMode": "HTML",
-    "disableNotification": false
+    "disableNotification": false,
+    "replyToMessageId": 1024
   }
   ```
-- `GET /api/relay/telegram/{profileId}/updates?offset=0&limit=20&timeout=0` — 拉取消息更新
-- `POST /api/relay/telegram/{profileId}/method/{method}` — 通用 Bot API 方法透传（如 `getMe`、`sendPhoto`、`getChat`）
+- **Bot API 专属接口 (`BOT_TOKEN`)**：
+  - `GET /api/relay/telegram/{profileId}/updates?offset=0&limit=20&timeout=0` — 拉取机器人消息更新
+  - `POST /api/relay/telegram/{profileId}/method/{method}` — 通用 Bot API 方法透传（如 `getMe`、`sendPhoto`、`getChat`）
+- **个人账号 MTProto 专属接口 (`USER_SESSION` / `gotd/td`)**：
+  - `GET /api/relay/telegram/{profileId}/dialogs?limit=30&offsetDate=0&folderId=0` — 列举所有私聊/群组/超级群/频道并返回标准 `chatId`
+  - `GET /api/relay/telegram/{profileId}/history?chatId=-1001234567890&limit=20&offsetId=0` — 读取群组、频道或私聊历史消息（`chatId` 支持 `-100...`、`-...`、用户 ID、`@username` 或 `me`）
+  - `GET /api/relay/telegram/{profileId}/search?chatId=-1001234567890&query=keyword&limit=20` — 群内或全局（省略 `chatId`）搜索历史消息
+  - `POST /api/relay/telegram/{profileId}/edit` — 编辑消息：`{"chatId":"me","messageId":123,"text":"updated","parseMode":"HTML"}`
+  - `POST /api/relay/telegram/{profileId}/delete` — 删除消息：`{"chatId":"-1001234567890","messageIds":[123,124],"revoke":true}`
+  - `POST /api/relay/telegram/{profileId}/forward` — 转发消息：`{"fromChatId":"-1001234567890","toChatId":"me","messageIds":[123],"dropAuthor":false,"silent":false}`
+  - `POST /api/relay/telegram/{profileId}/read` — 标记已读：`{"chatId":"-1001234567890","maxId":1024}`
+  - `GET /api/relay/telegram/{profileId}/resolve?chatId=@telegram` — 解析 `@username` 或会话实体信息
+- **控制台交互式登录辅助接口**（管理员鉴权）：
+  - `POST /api/connectors/telegram/auth/start` — 发送登录验证码
+  - `POST /api/connectors/telegram/auth/verify` — 提交验证码（及可选 2FA 云密码）换取 `tg_sess_v1:...` 会话字符串
 
 ### 5.4 SSH 中转接口 (`/api/relay/ssh/{profileId}`)
 - `POST /api/relay/ssh/{profileId}/exec` — 远程执行命令
