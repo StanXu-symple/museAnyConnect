@@ -145,9 +145,9 @@ public enum AiDocMeta {
             30
     ),
 
-    /** 查询服务运行状态、H2 内存占用与最近中转流水接口 */
+    /** 查询服务运行状态、SQLite 存储统计与最近中转流水接口 */
     EP_SYSTEM_STATS(
-            "Get runtime statistics, H2 memory usage, and recent relay activity",
+            "Get runtime statistics, SQLite storage usage, and recent relay activity",
             "",
             40
     ),

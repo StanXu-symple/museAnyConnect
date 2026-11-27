@@ -138,7 +138,7 @@ public class ConnectorService {
         return new SystemStats(
                 repository.count(),
                 repository.countEnabled(),
-                repository.queryH2DataBytes(),
+                repository.queryDbDataBytes(),
                 activityBuffer.size(),
                 activityBuffer.capacity(),
                 usedMb,

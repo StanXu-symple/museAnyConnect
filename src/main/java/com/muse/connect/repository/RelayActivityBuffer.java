@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
- * Bounded JVM ring buffer for recent relay calls so H2 database never grows with audit logs.
+ * Bounded JVM ring buffer for recent relay calls so SQLite database never grows with audit logs.
  */
 @Component
 public class RelayActivityBuffer {

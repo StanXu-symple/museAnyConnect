@@ -17,15 +17,20 @@ FROM eclipse-temurin:17-jre-noble
 
 WORKDIR /app
 
-RUN groupadd --system muse \
-    && useradd --system --gid muse --home-dir /app --shell /usr/sbin/nologin muse
+RUN groupadd --system --gid 10001 muse \
+    && useradd --system --uid 10001 --gid 10001 --home-dir /app --shell /usr/sbin/nologin muse \
+    && mkdir -p /data/sqlite /data/logs \
+    && chown -R muse:muse /app /data
 
 COPY --from=builder --chown=muse:muse /build/app.jar /app/app.jar
 
 ENV SERVER_PORT=8080 \
+    MUSE_DATA_DIR=/data \
     JAVA_OPTS="-Xms32m -Xmx128m"
 
 EXPOSE 8080
+
+VOLUME ["/data"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS "http://127.0.0.1:${SERVER_PORT:-8080}/health" >/dev/null || exit 1

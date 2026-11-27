@@ -8,13 +8,17 @@ import com.muse.connect.model.SystemStats;
 import com.muse.connect.repository.RelayActivityBuffer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
-class ConnectorServiceAndH2Test {
+class ConnectorServiceAndSqliteTest {
 
     @Autowired
     private ConnectorService connectorService;
@@ -22,8 +26,18 @@ class ConnectorServiceAndH2Test {
     @Autowired
     private RelayActivityBuffer activityBuffer;
 
+    @Value("${muse.data.sqlite-dir}")
+    private String sqliteDir;
+
+    @Value("${muse.data.log-dir}")
+    private String logDir;
+
     @Test
-    void crudRetainsSecretsMasksOutputAndMonitorsH2Memory() {
+    void crudRetainsSecretsMasksOutputAndPersistsInSqliteVolume() {
+        assertThat(Files.isDirectory(Path.of(sqliteDir))).isTrue();
+        assertThat(Files.isDirectory(Path.of(logDir))).isTrue();
+        assertThat(Files.exists(Path.of(sqliteDir, "muse-connect.db"))).isTrue();
+
         ConnectorProfile ssh = new ConnectorProfile();
         ssh.setId("ssh-unit-test");
         ssh.setName("Unit Test SSH");
@@ -49,8 +63,8 @@ class ConnectorServiceAndH2Test {
         assertThat(afterToggle).isFalse();
 
         SystemStats stats = connectorService.getStats();
-        assertThat(stats.h2DataBytes()).isGreaterThan(0L);
-        assertThat(stats.h2DataBytes()).isLessThan(4096L);
+        assertThat(stats.dbDataBytes()).isGreaterThan(0L);
+        assertThat(stats.dbDataBytes()).isLessThan(4096L);
 
         connectorService.delete("ssh-unit-test");
     }

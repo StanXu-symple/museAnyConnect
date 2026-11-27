@@ -44,9 +44,9 @@
             <div class="stat-sub">已启用：<span th:text="${stats.enabledCount}">0</span></div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">H2 数据库有效数据</div>
-            <div class="stat-value"><span th:text="${stats.h2DataBytes}">0</span> B</div>
-            <div class="stat-sub">CACHE_SIZE=1024 KB / 仅单表配置</div>
+            <div class="stat-label">SQLite 数据库有效数据</div>
+            <div class="stat-value"><span th:text="${stats.dbDataBytes}">0</span> B</div>
+            <div class="stat-sub">单表持久化 / WAL 模式</div>
         </div>
         <div class="stat-card">
             <div class="stat-label">JVM 堆内存使用</div>
@@ -56,7 +56,7 @@
         <div class="stat-card">
             <div class="stat-label">环形日志缓冲区</div>
             <div class="stat-value"><span th:text="${stats.activityCount}">0</span> / <span th:text="${stats.activityBufferCapacity}">100</span></div>
-            <div class="stat-sub">仅驻留 JVM，不写入 H2</div>
+            <div class="stat-sub">仅驻留 JVM，不写入 SQLite</div>
         </div>
     </section>
 
@@ -76,7 +76,7 @@
             <form th:action="@{/connectors/import}" method="post">
                 <input type="hidden" name="_csrf" th:value="${csrfToken}">
                 <div class="form-group">
-                    <label for="jsonPayload">粘贴导出的连接器 JSON 数组（纯内存模式重启后可快速恢复）</label>
+                    <label for="jsonPayload">粘贴导出的连接器 JSON 数组（用于快速迁移或批量恢复）</label>
                     <textarea id="jsonPayload" name="jsonPayload" class="form-control mono" placeholder='[{"id":"ssh-prod","name":"Prod Host","type":"SSH","authMode":"PRIVATE_KEY","enabled":true,"config":{...}}]' required></textarea>
                 </div>
                 <button type="submit" class="btn btn-primary btn-sm">执行导入</button>
@@ -151,7 +151,7 @@
     <section class="card">
         <div class="card-header">
             <h2 class="card-title">最近中转调用记录（JVM 环形缓冲）</h2>
-            <span class="muted">仅展示最近 25 条，不占用 H2 内存</span>
+            <span class="muted">仅展示最近 25 条，不写入 SQLite</span>
         </div>
         <div th:if="${#lists.isEmpty(activities)}" class="muted">暂无调用记录。</div>
         <div th:if="${!#lists.isEmpty(activities)}" class="table-wrap">

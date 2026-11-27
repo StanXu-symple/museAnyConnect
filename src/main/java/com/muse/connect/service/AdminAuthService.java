@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * In-memory administrator authentication backed by environment-injected credentials.
  * Uses PBKDF2-HMAC-SHA256 slow hashing, bounded session storage, CSRF tokens, and per-IP rate limiting.
- * Keeps zero authentication state in H2 so the memory database stays strictly single-table.
+ * Keeps zero authentication state in SQLite so the database stays strictly single-table.
  */
 @Service
 public class AdminAuthService {

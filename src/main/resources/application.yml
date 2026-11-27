@@ -13,25 +13,34 @@ spring:
   application:
     name: muse-any-connect
   datasource:
-    url: jdbc:h2:mem:museconn;DB_CLOSE_DELAY=-1;CACHE_SIZE=1024;MAX_MEMORY_ROWS=100;COMPRESS=TRUE;WRITE_DELAY=0
-    driver-class-name: org.h2.Driver
-    username: sa
-    password: ""
+    url: ${MUSE_SQLITE_URL:jdbc:sqlite:${muse.data.sqlite-dir}/muse-connect.db?journal_mode=WAL&busy_timeout=5000&synchronous=NORMAL&foreign_keys=ON}
+    driver-class-name: org.sqlite.JDBC
     hikari:
-      maximum-pool-size: 3
+      maximum-pool-size: 1
       minimum-idle: 1
       idle-timeout: 60000
-      pool-name: MuseH2Pool
+      connection-test-query: SELECT 1
+      pool-name: MuseSqlitePool
   sql:
     init:
       mode: always
-  h2:
-    console:
-      enabled: false
   thymeleaf:
     cache: true
 
+logging:
+  file:
+    name: ${muse.data.log-dir}/muse-any-connect.log
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 7
+      total-size-cap: 100MB
+
 muse:
+  data:
+    dir: ${MUSE_DATA_DIR:./data}
+    sqlite-dir: ${MUSE_SQLITE_DIR:${muse.data.dir}/sqlite}
+    log-dir: ${MUSE_LOG_DIR:${muse.data.dir}/logs}
   relay:
     api-key: ${MUSE_RELAY_API_KEY:123456789}
     default-timeout-ms: ${MUSE_DEFAULT_TIMEOUT_MS:15000}

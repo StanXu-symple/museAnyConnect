@@ -100,14 +100,14 @@ public class ConnectorProfileRepository {
     }
 
     public long countEnabled() {
-        Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM connector_profile WHERE enabled = TRUE", Long.class);
+        Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM connector_profile WHERE enabled = 1", Long.class);
         return count != null ? count : 0L;
     }
 
-    public long queryH2DataBytes() {
+    public long queryDbDataBytes() {
         try {
             Long bytes = jdbcTemplate.queryForObject(
-                    "SELECT COALESCE(SUM(OCTET_LENGTH(id) + OCTET_LENGTH(name) + OCTET_LENGTH(type) + OCTET_LENGTH(auth_mode) + OCTET_LENGTH(config_json) + 9), 0) FROM connector_profile",
+                    "SELECT COALESCE(SUM(LENGTH(CAST(id AS BLOB)) + LENGTH(CAST(name AS BLOB)) + LENGTH(CAST(type AS BLOB)) + LENGTH(CAST(auth_mode AS BLOB)) + LENGTH(CAST(config_json AS BLOB)) + 9), 0) FROM connector_profile",
                     Long.class
             );
             return bytes != null ? bytes : 0L;

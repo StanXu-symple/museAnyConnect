@@ -20,7 +20,7 @@
             <h1 class="card-title" style="font-size: 1.2rem;">控制台管理员登录</h1>
         </div>
         <p class="muted" style="margin-top: 0; margin-bottom: 18px;">
-            凭据由环境变量安全注入，会话仅驻留服务端内存（不写入 H2）。
+            凭据由环境变量安全注入，会话仅驻留服务端内存（不写入 SQLite）。
         </p>
 
         <div th:if="${message}" class="alert alert-success" th:text="${message}"></div>

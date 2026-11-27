@@ -1,11 +1,11 @@
 # MuseAnyConnect — Muse HTTP 连接器中转站
 
-**MuseAnyConnect** 是专为 **Muse** 设计的轻量级 HTTP 中转服务（Relay Gateway），基于 **JDK 17 + Spring Boot 3.5 + H2 内存数据库 + Thymeleaf** 构建，将外部平台与远程主机能力统一封装为标准 HTTP REST 接口：
+**MuseAnyConnect** 是专为 **Muse** 设计的轻量级 HTTP 中转服务（Relay Gateway），基于 **JDK 17 + Spring Boot 3.5 + SQLite 持久化数据库 + Thymeleaf** 构建，将外部平台与远程主机能力统一封装为标准 HTTP REST 接口：
 
-- **X (Twitter) 连接器**：支持 Bearer Token（OAuth 2.0 App-Only / User Token）与 OAuth 1.0a（HMAC-SHA1 自动签名），支持通用 `/2/**` API 转发以及发推、搜索、用户查询等快捷接口。
+- **X (Twitter) 连接器**：支持 Bearer Token（OAuth 2.0 App-Only / User Token）、OAuth 1.0a（HMAC-SHA1 自动签名）与普通用户网页 Cookie（`auth_token` + `ct0`），支持通用转发以及发推、搜索、用户查询等快捷接口。
 - **Telegram 连接器**：支持 Bot API Token 与可选代理转发，支持快捷发送消息、拉取更新以及任意 Bot API 方法透传。
 - **SSH 远程服务器连接器**：基于 JSch 支持密码认证与私钥（RSA / Ed25519 / ECDSA）认证，提供 HTTP 命令执行与 SFTP 文件读写接口。
-- **Thymeleaf 管理控制台**：轻量级服务端渲染界面，无需 Node/前端构建，支持连接配置增删改查、连通性测试、配置 JSON 导入/导出、在线调试（Playground）与 curl 生成，以及实时 H2 内存占用监控。
+- **Thymeleaf 管理控制台**：轻量级服务端渲染界面，无需 Node/前端构建，支持连接配置增删改查、连通性测试、配置 JSON 导入/导出、在线调试（Playground）与 curl 生成、面向注解的 AI 文档预览，以及实时 SQLite 存储与 JVM 内存监控。
 
 ---
 
@@ -15,7 +15,7 @@
 | :--- | :--- | :--- |
 | 运行时 | JDK 17 | 使用原生 `java.net.http.HttpClient`，零额外 HTTP 客户端依赖 |
 | 框架 | Spring Boot 3.5.11 | Web + Thymeleaf + JDBC（不使用 JPA/Hibernate 以降低内存占用） |
-| 内存数据库 | H2 (`mem:museconn`) | 仅存核心连接配置，极致压缩缓存与内存行上限 |
+| 数据库 | SQLite (`sqlite-jdbc`) | 单文件嵌入式持久化（WAL 模式），挂载数据卷后重启不丢配置 |
 | SSH 引擎 | `com.github.mwiede:jsch` 0.2.21 | 轻量单包，支持现代 OpenSSH 密钥算法 |
 | 前端界面 | Thymeleaf + 原生 CSS/JS | 零构建步骤，开箱即用 |
 
@@ -42,7 +42,7 @@ museAnyConnect/
     │   │   ├── repository/          # Spring JDBC 仓库 & JVM 环形日志缓冲区
     │   │   └── service/             # X / Telegram / SSH 中转与签名核心逻辑
     │   └── resources/
-    │       ├── application.yml      # 服务配置与 H2 内存压缩参数
+    │       ├── application.yml      # 服务配置与 SQLite / 日志目录参数
     │       ├── schema.sql           # 极简单表 DDL
     │       ├── static/css/app.css   # 控制台样式
     │       └── templates/           # Thymeleaf 页面模板
@@ -51,22 +51,26 @@ museAnyConnect/
 
 ---
 
-## 2. H2 内存数据库压缩策略（核心设计）
+## 2. SQLite 持久化与数据卷设计（核心设计）
 
-为满足**尽量压缩内存数据库使用**的要求，本项目采取以下优化措施：
+为兼顾**容器重启不丢配置**与**极低内存占用**，本项目采用单数据卷 + 极简 SQLite 架构：
 
-1. **移除 JPA / Hibernate**：直接使用 `spring-boot-starter-jdbc` (`JdbcTemplate`)，避免 ORM 元数据、一级缓存、动态代理和额外连接池开销。
-2. **H2 参数极简调优**：
+1. **移除 JPA / Hibernate**：直接使用 `spring-boot-starter-jdbc` (`JdbcTemplate`)，避免 ORM 元数据、一级缓存、动态代理和额外内存开销。
+2. **统一数据卷目录结构**（容器内默认挂载 `/data`，本地默认 `./data`）：
    ```text
-   jdbc:h2:mem:museconn;DB_CLOSE_DELAY=-1;CACHE_SIZE=1024;MAX_MEMORY_ROWS=100;COMPRESS=TRUE;WRITE_DELAY=0
+   data/
+   ├── sqlite/
+   │   └── muse-connect.db          # SQLite 单文件数据库（WAL 模式）
+   └── logs/
+       └── muse-any-connect.log     # 滚动应用日志（单文件 10MB，保留 7 天，总上限 100MB）
    ```
-   - `CACHE_SIZE=1024`：将 H2 页缓存限制为 **1 MB**（默认通常为 16 MB 或堆内存百分比）。
-   - `MAX_MEMORY_ROWS=100`：严格限制常驻内存结果集行数。
-   - `COMPRESS=TRUE`：启用 H2 内部数据压缩。
-   - `HikariCP` 连接池收紧为 `maximum-pool-size=3`、`minimum-idle=1`。
-3. **单表极简 Schema**：H2 中仅持久化 `connector_profile` 一张小表，每条连接配置序列化为紧凑 JSON（限制 4KB 以内），**不在 H2 中存储任何调用日志、审计流水或大二进制对象**。
-4. **调用日志走 JVM 定长环形缓冲区**：最近 100 条请求记录存放在 `RelayActivityBuffer`（`ConcurrentLinkedDeque` 定长淘汰），H2 内存不会随调用次数增长。
-5. **无状态导入/导出**：由于 H2 运行在纯内存模式，进程重启后会清空；控制台和 API 提供 JSON 导出/导入（以及可选启动预置配置），兼顾零磁盘依赖与配置可迁移性。
+3. **SQLite 参数调优**：
+   ```text
+   jdbc:sqlite:${MUSE_DATA_DIR}/sqlite/muse-connect.db?journal_mode=WAL&busy_timeout=5000&synchronous=NORMAL&foreign_keys=ON
+   ```
+   - `HikariCP` 连接池收紧为 `maximum-pool-size=1`，避免 SQLite 并发写锁竞争并压低内存占用。
+4. **单表极简 Schema**：SQLite 中仅持久化 `connector_profile` 一张表，每条连接配置序列化为紧凑 JSON，**不在数据库中存储调用日志、审计流水或登录会话**。
+5. **调用日志走 JVM 定长环形缓冲区**：最近 100 条请求记录存放在 `RelayActivityBuffer`（`ConcurrentLinkedDeque` 定长淘汰），数据库文件不会随调用次数膨胀。
 
 ---
 
@@ -93,13 +97,17 @@ java -Xms32m -Xmx128m -jar target/muse-any-connect-0.1.0-SNAPSHOT.jar
 - **管理控制台 (Thymeleaf)**：`http://localhost:8080/`（开启登录保护后自动跳转 `/login`）
 - **在线调试台 (Playground)**：`http://localhost:8080/playground`
 - **公开健康检查**：`http://localhost:8080/health`
-- **运行状态与 H2 内存统计**：`http://localhost:8080/api/stats`
+- **运行状态与 SQLite 存储统计**：`http://localhost:8080/api/stats`
 
 ### 可选环境变量 / 配置项 (`application.yml`)
 
 | 配置项 | 环境变量 | 默认值 | 说明 |
 | :--- | :--- | :--- | :--- |
 | `server.port` | `SERVER_PORT` | `8080` | HTTP 服务端口 |
+| `muse.data.dir` | `MUSE_DATA_DIR` | `./data`（Docker 内为 `/data`） | 持久化数据根目录（自动创建 `sqlite/` 与 `logs/` 子目录） |
+| `muse.data.sqlite-dir` | `MUSE_SQLITE_DIR` | `${MUSE_DATA_DIR}/sqlite` | SQLite 数据库文件目录 |
+| `muse.data.log-dir` | `MUSE_LOG_DIR` | `${MUSE_DATA_DIR}/logs` | 应用滚动日志文件目录 |
+| `spring.datasource.url` | `MUSE_SQLITE_URL` | `jdbc:sqlite:${muse.data.sqlite-dir}/muse-connect.db?...` | 可选：自定义完整 SQLite JDBC 连接串 |
 | `muse.auth.username` | `MUSE_ADMIN_USERNAME` | `admin` | 控制台初始管理员账号 |
 | `muse.auth.password` | `MUSE_ADMIN_PASSWORD` | `123456`（兜底默认值） | 控制台初始管理员密码（未配置或留空时兜底为 `123456`；启动时自动用 PBKDF2-HMAC-SHA256 哈希并清除内存明文） |
 | `muse.auth.password-hash` | `MUSE_ADMIN_PASSWORD_HASH` | `""` | 可选：直接注入预计算的 PBKDF2 哈希（`pbkdf2$<iter>$<saltB64>$<hashB64>`），优先级高于明文密码 |
@@ -112,7 +120,7 @@ java -Xms32m -Xmx128m -jar target/muse-any-connect-0.1.0-SNAPSHOT.jar
 | `muse.relay.activity-buffer-size` | `MUSE_ACTIVITY_BUFFER_SIZE` | `100` | JVM 环形日志最大条数 |
 
 #### 登录权限与安全机制说明
-- **零 H2 侵入**：登录账号、PBKDF2 密码哈希、有界内存会话（上限 64 条）与 IP 防爆破计数均独立驻留 JVM 内存，不向 H2 写入任何用户或会话表，容器重启后所有历史会话自动失效。
+- **零数据库侵入**：登录账号、PBKDF2 密码哈希、有界内存会话（上限 64 条）与 IP 防爆破计数均独立驻留 JVM 内存，不向 SQLite 写入任何用户或会话表，容器重启后所有历史会话自动失效。
 - **双轨鉴权**：
   - 配置 `MUSE_ADMIN_PASSWORD`（或 `MUSE_ADMIN_PASSWORD_HASH`）后，控制台页面（`/`、`/connectors/**`、`/playground`）与 `/api/**` 均受保护；未登录访问页面自动跳转 `/login`，未认证调用 `/api/**` 返回 `401`。
   - 同时配置 `MUSE_RELAY_API_KEY` 时，外部机器/Muse 通过请求头 `X-Muse-Key` 访问 `/api/**`，管理员登录后可在浏览器 Playground 直接调试。
@@ -134,6 +142,7 @@ docker pull ghcr.io/stanxu-symple/museanyconnect:latest
 docker run -d \
   --name muse-any-connect \
   -p 8080:8080 \
+  -v $(pwd)/mseAnyConnect/data:/data \
   -e MUSE_ADMIN_USERNAME="admin" \
   -e MUSE_ADMIN_PASSWORD="change-me-strong-password" \
   -e MUSE_RELAY_API_KEY="your-secret-key" \
@@ -141,7 +150,13 @@ docker run -d \
   ghcr.io/stanxu-symple/museanyconnect:latest
 ```
 
-或使用项目自带的 `docker-compose.yml`：
+挂载 `/data` 后，宿主机 `./data` 目录会自动生成：
+- `./data/sqlite/muse-connect.db`（连接器配置持久化，容器升级/重启后自动保留）
+- `./data/logs/muse-any-connect.log`（滚动运行日志）
+
+> **Linux 宿主机权限提示**：镜像使用非 root 用户 `muse`（UID/GID `10001`）运行，如果在 Linux 宿主机挂载本地目录遇到写权限不足，可先执行 `mkdir -p ./data/sqlite ./data/logs && chown -R 10001:10001 ./data`。
+
+或使用项目自带的 `docker-compose.yml`（已默认映射 `${MUSE_HOST_DATA_DIR:-./data}:/data`）：
 
 ```bash
 docker compose pull
@@ -201,7 +216,7 @@ docker run -d --name muse-any-connect -p 8080:8080 muse-any-connect:local
 - `POST /api/connectors/{id}/test` — 执行连通性测试
 - `GET /api/connectors/export` — 导出全部连接器 JSON
 - `POST /api/connectors/import` — 批量导入连接器 JSON
-- `GET /api/stats` — 查看运行状态、调用计数及 H2 内存占用
+- `GET /api/stats` — 查看运行状态、调用计数及 SQLite 存储统计
 
 ### 5.2 X 中转接口 (`/api/relay/x/{profileId}`)
 - `POST /api/relay/x/{profileId}/request` — 通用 X API 转发

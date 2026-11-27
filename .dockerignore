@@ -4,7 +4,11 @@
 .idea
 .vscode
 target
+data
 logs
+*.db
+*.db-wal
+*.db-shm
 *.iml
 *.log
 *.env
