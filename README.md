@@ -182,7 +182,7 @@ docker run -d --name muse-any-connect -p 8080:8080 muse-any-connect:local
 - **认证方式 (`authMode`)**：
   - `BEARER_TOKEN`：使用 Bearer Token 调用 X API v2（App-Only Bearer Token 仅读公开数据；OAuth 2.0 User Access Token 支持读写，默认 2 小时过期）。
   - `OAUTH1A`：配置 `apiKey`、`apiSecret`、`accessToken`、`accessTokenSecret`，中转站自动生成 HMAC-SHA1 `Authorization: OAuth ...` 请求头（**推荐长期自动发推**，凭证不会自动过期）。
-  - `COOKIE_AUTH`：普通用户免开发者账号模式，配置浏览器 Cookie 中的 `authToken`（`auth_token`）与 `ct0`，中转站自动注入 `Cookie`、`x-csrf-token`、Web Bearer Token 以及动态计算的 `x-client-transaction-id` 签名头（参考 twscrape 算法，遇 404 自动刷新签名并重试）并转发至 `https://x.com/i/api/**`（支持发推、搜索、查用户、连通性测试及通用 `/i/api/...` 透传，并支持 `graphqlQueryIds` 热覆盖 GraphQL Query ID）。
+  - `COOKIE_AUTH`：普通用户免开发者账号模式，配置浏览器 Cookie 中的 `authToken`（`auth_token`）与 `ct0`，中转站自动注入 `Cookie`、`x-csrf-token`、Web Bearer Token 以及动态计算的 `x-client-transaction-id` 签名头（参考 twscrape 算法，遇 404 自动刷新签名并重试），并自动从 X Web 前端脚本解析最新的 GraphQL `queryId` 与 `featureSwitches`（遇 404 `Query not found` 自动刷新并重试），同时仍支持通过 `graphqlQueryIds` 手动热覆盖。
 - **如何获取**：
   - **App-Only Bearer Token**：登录 `developer.x.com/en/portal/dashboard` → 打开 App → **Keys and tokens** → **Bearer Token** → **Generate**。
   - **OAuth 2.0 User Access Token (PKCE)**：在 **Settings → User authentication settings** 开启 `Read and write` 与 Callback URI → 记录 `Client ID` → 通过 `https://x.com/i/oauth2/authorize` 授权拿 `code` → 调 `POST https://api.x.com/2/oauth2/token` 换取 `access_token`。

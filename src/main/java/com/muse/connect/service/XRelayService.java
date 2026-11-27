@@ -22,6 +22,8 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,9 +39,9 @@ public class XRelayService {
     private static final String DEFAULT_USER_AGENT = XClientTransactionIdProvider.DEFAULT_WEB_USER_AGENT;
 
     private static final Map<String, String> DEFAULT_GRAPHQL_QUERY_IDS = Map.of(
-            "CreateTweet", "xT36w0XM3A8jEuQtx2JIQw",
-            "SearchTimeline", "hyPfJYJ_XAtDYoslQc-Rgg",
-            "UserByScreenName", "Gb-d6r0vxPOADdG62OEBpQ"
+            "CreateTweet", "l4hk8uVGvR-a8kzQ4nOhPA",
+            "SearchTimeline", "vLHjqbDv7TPFMBkIIO1nOA",
+            "UserByScreenName", "AMIBMjtxEEATh4z8V9GtRg"
     );
 
     private final ConnectorService connectorService;
@@ -135,50 +137,104 @@ public class XRelayService {
     }
 
     private RelayResponse postTweetViaCookie(ConnectorProfile profile, String text, String replyToTweetId) {
-        String queryId = resolveGraphqlQueryId(profile.getConfig(), "CreateTweet");
-        Map<String, Object> variables = new LinkedHashMap<>();
-        variables.put("tweet_text", text);
-        variables.put("dark_request", false);
-        variables.put("media", Map.of("media_entities", List.of(), "possibly_sensitive", false));
-        variables.put("semantic_annotation_ids", List.of());
-        if (StringUtils.hasText(replyToTweetId)) {
-            variables.put("reply", Map.of(
-                    "in_reply_to_tweet_id", replyToTweetId.trim(),
-                    "exclude_reply_user_ids", List.of()
-            ));
-        }
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("variables", variables);
-        payload.put("features", defaultTweetFeatures());
-        payload.put("queryId", queryId);
-        return execute(profile, "POST", "/i/api/graphql/" + queryId + "/CreateTweet", null, payload);
+        return executeGraphqlOperation(profile, "CreateTweet", op -> {
+            Map<String, Object> variables = new LinkedHashMap<>();
+            variables.put("tweet_text", text);
+            variables.put("dark_request", false);
+            variables.put("media", Map.of("media_entities", List.of(), "possibly_sensitive", false));
+            variables.put("semantic_annotation_ids", List.of());
+            if (StringUtils.hasText(replyToTweetId)) {
+                variables.put("reply", Map.of(
+                        "in_reply_to_tweet_id", replyToTweetId.trim(),
+                        "exclude_reply_user_ids", List.of()
+                ));
+            }
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("variables", variables);
+            payload.put("features", mergeFeatureSwitches(defaultTweetFeatures(), op.featureSwitches()));
+            payload.put("queryId", op.queryId());
+            return execute(profile, "POST", "/i/api/graphql/" + op.queryId() + "/CreateTweet", null, payload);
+        });
     }
 
     private RelayResponse searchViaCookie(ConnectorProfile profile, String query, int count) {
-        String queryId = resolveGraphqlQueryId(profile.getConfig(), "SearchTimeline");
-        Map<String, Object> variables = new LinkedHashMap<>();
-        variables.put("rawQuery", query);
-        variables.put("count", count);
-        variables.put("querySource", "typed_query");
-        variables.put("product", "Latest");
+        return executeGraphqlOperation(profile, "SearchTimeline", op -> {
+            Map<String, Object> variables = new LinkedHashMap<>();
+            variables.put("rawQuery", query);
+            variables.put("count", count);
+            variables.put("querySource", "typed_query");
+            variables.put("product", "Latest");
 
-        Map<String, String> params = new LinkedHashMap<>();
-        params.put("variables", writeJson(variables));
-        params.put("features", writeJson(defaultTweetFeatures()));
-        params.put("fieldToggles", writeJson(Map.of("withArticleRichContentState", false)));
-        return execute(profile, "GET", "/i/api/graphql/" + queryId + "/SearchTimeline", params, null);
+            Map<String, String> params = new LinkedHashMap<>();
+            params.put("variables", writeJson(variables));
+            params.put("features", writeJson(mergeFeatureSwitches(defaultTweetFeatures(), op.featureSwitches())));
+            params.put("fieldToggles", writeJson(Map.of("withArticleRichContentState", false)));
+            return execute(profile, "GET", "/i/api/graphql/" + op.queryId() + "/SearchTimeline", params, null);
+        });
     }
 
     private RelayResponse getUserViaCookie(ConnectorProfile profile, String screenName) {
-        String queryId = resolveGraphqlQueryId(profile.getConfig(), "UserByScreenName");
-        Map<String, Object> variables = new LinkedHashMap<>();
-        variables.put("screen_name", screenName);
-        variables.put("withSafetyModeUserFields", true);
+        return executeGraphqlOperation(profile, "UserByScreenName", op -> {
+            Map<String, Object> variables = new LinkedHashMap<>();
+            variables.put("screen_name", screenName);
+            variables.put("withSafetyModeUserFields", true);
 
-        Map<String, String> params = new LinkedHashMap<>();
-        params.put("variables", writeJson(variables));
-        params.put("features", writeJson(defaultUserFeatures()));
-        return execute(profile, "GET", "/i/api/graphql/" + queryId + "/UserByScreenName", params, null);
+            Map<String, String> params = new LinkedHashMap<>();
+            params.put("variables", writeJson(variables));
+            params.put("features", writeJson(mergeFeatureSwitches(defaultUserFeatures(), op.featureSwitches())));
+            return execute(profile, "GET", "/i/api/graphql/" + op.queryId() + "/UserByScreenName", params, null);
+        });
+    }
+
+    private RelayResponse executeGraphqlOperation(
+            ConnectorProfile profile,
+            String operationName,
+            Function<XClientTransactionIdProvider.GraphqlOperationMeta, RelayResponse> invoker
+    ) {
+        ConnectorConfig cfg = profile.getConfig();
+        Optional<String> customQueryId = resolveCustomGraphqlQueryId(cfg, operationName);
+        if (customQueryId.isPresent()) {
+            return invoker.apply(new XClientTransactionIdProvider.GraphqlOperationMeta(customQueryId.get(), List.of()));
+        }
+
+        String baseUrl = resolveBaseUrl(profile);
+        int timeoutMs = httpClientFactory.resolveTimeoutMs(cfg, properties.getDefaultTimeoutMs());
+        HttpClient client = httpClientFactory.getClient(cfg, properties.getDefaultTimeoutMs());
+
+        XClientTransactionIdProvider.GraphqlOperationMeta initialOp = transactionIdProvider
+                .resolveGraphqlOperation(profile, client, baseUrl, operationName, timeoutMs, false)
+                .orElseGet(() -> new XClientTransactionIdProvider.GraphqlOperationMeta(
+                        DEFAULT_GRAPHQL_QUERY_IDS.getOrDefault(operationName, operationName),
+                        List.of()
+                ));
+
+        RelayResponse response = invoker.apply(initialOp);
+        if (!response.success() && response.statusCode() == 404) {
+            Optional<XClientTransactionIdProvider.GraphqlOperationMeta> refreshed = transactionIdProvider
+                    .resolveGraphqlOperation(profile, client, baseUrl, operationName, timeoutMs, true);
+            if (refreshed.isPresent() && !refreshed.get().queryId().equals(initialOp.queryId())) {
+                return invoker.apply(refreshed.get());
+            }
+        }
+        return response;
+    }
+
+    private String resolveBaseUrl(ConnectorProfile profile) {
+        ConnectorConfig cfg = profile.getConfig();
+        String defaultBase = profile.getAuthMode() == AuthMode.COOKIE_AUTH ? DEFAULT_WEB_BASE_URL : DEFAULT_BASE_URL;
+        return StringUtils.hasText(cfg.getApiBaseUrl())
+                ? cfg.getApiBaseUrl().replaceAll("/+$", "")
+                : defaultBase;
+    }
+
+    private Map<String, Object> mergeFeatureSwitches(Map<String, Object> base, List<String> extraSwitches) {
+        if (extraSwitches == null || extraSwitches.isEmpty()) {
+            return base;
+        }
+        for (String sw : extraSwitches) {
+            base.putIfAbsent(sw, false);
+        }
+        return base;
     }
 
     private RelayResponse execute(
@@ -338,6 +394,11 @@ public class XRelayService {
     }
 
     String resolveGraphqlQueryId(ConnectorConfig cfg, String operationName) {
+        return resolveCustomGraphqlQueryId(cfg, operationName)
+                .orElseGet(() -> DEFAULT_GRAPHQL_QUERY_IDS.getOrDefault(operationName, operationName));
+    }
+
+    Optional<String> resolveCustomGraphqlQueryId(ConnectorConfig cfg, String operationName) {
         if (cfg != null && StringUtils.hasText(cfg.getGraphqlQueryIds())) {
             String[] entries = cfg.getGraphqlQueryIds().split("[,;\\n]");
             for (String entry : entries) {
@@ -346,12 +407,12 @@ public class XRelayService {
                     String key = entry.substring(0, eq).trim();
                     String val = entry.substring(eq + 1).trim();
                     if (operationName.equalsIgnoreCase(key) && StringUtils.hasText(val)) {
-                        return val;
+                        return Optional.of(val);
                     }
                 }
             }
         }
-        return DEFAULT_GRAPHQL_QUERY_IDS.getOrDefault(operationName, operationName);
+        return Optional.empty();
     }
 
     private Map<String, Object> defaultTweetFeatures() {
@@ -359,6 +420,8 @@ public class XRelayService {
         f.put("articles_preview_enabled", false);
         f.put("c9s_tweet_anatomy_moderator_badge_enabled", true);
         f.put("communities_web_enable_tweet_community_results_fetch", true);
+        f.put("content_disclosure_ai_generated_indicator_enabled", false);
+        f.put("content_disclosure_indicator_enabled", false);
         f.put("creator_subscriptions_quote_tweet_preview_enabled", false);
         f.put("creator_subscriptions_tweet_preview_api_enabled", true);
         f.put("freedom_of_speech_not_reach_fetch_enabled", true);
@@ -366,17 +429,35 @@ public class XRelayService {
         f.put("longform_notetweets_consumption_enabled", true);
         f.put("longform_notetweets_inline_media_enabled", true);
         f.put("longform_notetweets_rich_text_read_enabled", true);
+        f.put("post_ctas_fetch_enabled", false);
+        f.put("premium_content_api_read_enabled", false);
+        f.put("profile_label_improvements_pcf_label_in_post_enabled", false);
         f.put("responsive_web_edit_tweet_api_enabled", true);
         f.put("responsive_web_enhance_cards_enabled", false);
         f.put("responsive_web_graphql_exclude_directive_enabled", true);
         f.put("responsive_web_graphql_skip_user_profile_image_extensions_enabled", false);
-        f.put("responsive_web_grok_community_note_auto_translation_is_enabled", false);
         f.put("responsive_web_graphql_timeline_navigation_enabled", true);
+        f.put("responsive_web_grok_analysis_button_from_backend", false);
+        f.put("responsive_web_grok_analyze_button_fetch_trends_enabled", false);
+        f.put("responsive_web_grok_analyze_post_followups_enabled", false);
+        f.put("responsive_web_grok_annotations_enabled", false);
+        f.put("responsive_web_grok_community_note_auto_translation_is_enabled", false);
+        f.put("responsive_web_grok_image_annotation_enabled", false);
         f.put("responsive_web_grok_imagine_annotation_enabled", false);
+        f.put("responsive_web_grok_share_attachment_enabled", false);
+        f.put("responsive_web_grok_show_grok_translated_post", true);
+        f.put("responsive_web_jetfuel_frame", false);
+        f.put("responsive_web_made_on_x_label_enabled", false);
         f.put("responsive_web_media_download_video_enabled", false);
+        f.put("responsive_web_nested_quote_preview_enabled", false);
         f.put("responsive_web_profile_redirect_enabled", true);
         f.put("responsive_web_twitter_article_tweet_consumption_enabled", true);
+        f.put("rweb_cashtags_composer_attachment_enabled", false);
+        f.put("rweb_cashtags_enabled", false);
+        f.put("rweb_conversational_replies_downvote_enabled", false);
+        f.put("rweb_sports_post_context_enabled", false);
         f.put("rweb_tipjar_consumption_enabled", true);
+        f.put("rweb_video_screen_enabled", true);
         f.put("rweb_video_timestamps_enabled", true);
         f.put("standardized_nudges_misinfo", true);
         f.put("tweet_awards_web_tipping_enabled", false);
@@ -385,16 +466,7 @@ public class XRelayService {
         f.put("tweetypie_unmention_optimization_enabled", true);
         f.put("verified_phone_label_enabled", false);
         f.put("view_counts_everywhere_api_enabled", true);
-        f.put("responsive_web_grok_analyze_button_fetch_trends_enabled", false);
-        f.put("premium_content_api_read_enabled", false);
-        f.put("profile_label_improvements_pcf_label_in_post_enabled", false);
-        f.put("responsive_web_grok_share_attachment_enabled", false);
-        f.put("responsive_web_grok_analyze_post_followups_enabled", false);
-        f.put("responsive_web_grok_image_annotation_enabled", false);
-        f.put("responsive_web_grok_analysis_button_from_backend", false);
-        f.put("responsive_web_jetfuel_frame", false);
-        f.put("rweb_video_screen_enabled", true);
-        f.put("responsive_web_grok_show_grok_translated_post", true);
+        f.put("x_elections_post_context_enabled", false);
         return f;
     }
 

@@ -28,6 +28,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -89,13 +90,19 @@ public class XClientTransactionIdProvider {
                     Pattern.CASE_INSENSITIVE);
     private static final Pattern INDICES_REGEX =
             Pattern.compile("(\\(\\w\\[(\\d{1,2})],\\s*16\\))+");
+    private static final Pattern GRAPHQL_OP_PATTERN = Pattern.compile(
+            "queryId:\"([A-Za-z0-9_-]+)\",operationName:\"(CreateTweet|SearchTimeline|UserByScreenName)\"(?:[^}]*?metadata:\\{[^}]*?featureSwitches:\\[([^\\]]*)\\])?"
+    );
+    private static final Pattern QUOTED_STRING_PATTERN = Pattern.compile("\"([^\"]+)\"");
     private static final Pattern INPUT_TAG_PATTERN =
             Pattern.compile("<input\\b[^>]*>", Pattern.CASE_INSENSITIVE);
     private static final Pattern VALUE_ATTR_PATTERN =
             Pattern.compile("\\bvalue\\s*=\\s*[\"']([^\"']*)[\"']", Pattern.CASE_INSENSITIVE);
+    private static final Set<String> TRACKED_GRAPHQL_OPS =
+            Set.of("CreateTweet", "SearchTimeline", "UserByScreenName");
 
     private final ObjectMapper objectMapper;
-    private final ConcurrentHashMap<String, CachedKeys> cache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CachedWebContext> cache = new ConcurrentHashMap<>();
 
     public XClientTransactionIdProvider(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -110,6 +117,39 @@ public class XClientTransactionIdProvider {
             int timeoutMs,
             boolean forceRefresh
     ) {
+        Optional<CachedWebContext> ctx = getOrFetchContext(profile, client, baseUrl, timeoutMs, forceRefresh);
+        return ctx.map(c -> c.keys().generate(method, path));
+    }
+
+    public Optional<GraphqlOperationMeta> resolveGraphqlOperation(
+            ConnectorProfile profile,
+            HttpClient client,
+            String baseUrl,
+            String operationName,
+            int timeoutMs,
+            boolean forceRefresh
+    ) {
+        if (!StringUtils.hasText(operationName)) {
+            return Optional.empty();
+        }
+        Optional<CachedWebContext> ctxOpt = getOrFetchContext(profile, client, baseUrl, timeoutMs, forceRefresh);
+        if (ctxOpt.isEmpty()) {
+            return Optional.empty();
+        }
+        CachedWebContext ctx = ctxOpt.get();
+        if (forceRefresh || !ctx.opsScanned().get()) {
+            scanGraphqlOperations(ctx, client, timeoutMs);
+        }
+        return Optional.ofNullable(ctx.graphqlOps().get(operationName));
+    }
+
+    private Optional<CachedWebContext> getOrFetchContext(
+            ConnectorProfile profile,
+            HttpClient client,
+            String baseUrl,
+            int timeoutMs,
+            boolean forceRefresh
+    ) {
         ConnectorConfig cfg = profile.getConfig();
         if (cfg == null || !StringUtils.hasText(cfg.getAuthToken()) || !StringUtils.hasText(cfg.getCt0())) {
             return Optional.empty();
@@ -119,19 +159,19 @@ public class XClientTransactionIdProvider {
         long now = System.currentTimeMillis();
 
         if (!forceRefresh) {
-            CachedKeys cached = cache.get(cacheKey);
+            CachedWebContext cached = cache.get(cacheKey);
             if (cached != null && now - cached.fetchedAtMs() < CACHE_TTL_MS) {
-                return Optional.of(cached.keys().generate(method, path));
+                return Optional.of(cached);
             }
         }
 
         try {
             String cookieHeader = "auth_token=" + cfg.getAuthToken().trim() + "; ct0=" + cfg.getCt0().trim();
-            TransactionKeys freshKeys = fetchKeys(client, bootstrapBase, cookieHeader, timeoutMs);
-            putCached(cacheKey, new CachedKeys(freshKeys, System.currentTimeMillis()));
-            return Optional.of(freshKeys.generate(method, path));
+            CachedWebContext fresh = fetchWebContext(client, bootstrapBase, cookieHeader, timeoutMs);
+            putCached(cacheKey, fresh);
+            return Optional.of(fresh);
         } catch (Exception ex) {
-            log.warn("Unable to initialize X x-client-transaction-id keys from {}: {}", bootstrapBase, ex.getMessage());
+            log.warn("Unable to initialize X web context from {}: {}", bootstrapBase, ex.getMessage());
             return Optional.empty();
         }
     }
@@ -140,7 +180,7 @@ public class XClientTransactionIdProvider {
         cache.clear();
     }
 
-    private void putCached(String key, CachedKeys value) {
+    private void putCached(String key, CachedWebContext value) {
         if (cache.size() >= MAX_CACHE_ENTRIES && !cache.containsKey(key)) {
             cache.clear();
         }
@@ -164,7 +204,7 @@ public class XClientTransactionIdProvider {
         return trimmed;
     }
 
-    private TransactionKeys fetchKeys(
+    private CachedWebContext fetchWebContext(
             HttpClient client,
             String bootstrapBase,
             String cookieHeader,
@@ -174,9 +214,76 @@ public class XClientTransactionIdProvider {
         String html = fetchPageText(client, pageUri, cookieHeader, timeoutMs);
         byte[] vkBytes = parseVerificationKey(html);
         List<double[]> animRows = parseAnimationRows(html, vkBytes);
-        List<Integer> animIndices = parseSigningIndices(html, pageUri, client, cookieHeader, timeoutMs);
+        List<String> allScripts = extractScriptUrls(html, pageUri);
+        List<Integer> animIndices = parseSigningIndices(allScripts, client, timeoutMs);
         String animKey = computeAnimKey(vkBytes, animRows, animIndices);
-        return new TransactionKeys(vkBytes, animKey);
+        List<String> graphqlBundleCandidates = selectGraphqlBundleUrls(allScripts);
+        return new CachedWebContext(
+                new TransactionKeys(vkBytes, animKey),
+                graphqlBundleCandidates,
+                new ConcurrentHashMap<>(),
+                new AtomicBoolean(false),
+                System.currentTimeMillis()
+        );
+    }
+
+    private void scanGraphqlOperations(CachedWebContext ctx, HttpClient client, int timeoutMs) {
+        try {
+            int limit = Math.min(ctx.bundleScriptUrls().size(), 24);
+            for (int i = 0; i < limit; i++) {
+                String scriptUrl = ctx.bundleScriptUrls().get(i);
+                try {
+                    HttpResponse<String> resp = sendGet(client, URI.create(scriptUrl), null, Math.min(timeoutMs, 10_000));
+                    if (resp.statusCode() >= 200 && resp.statusCode() < 300 && resp.body() != null) {
+                        Map<String, GraphqlOperationMeta> found = parseGraphqlOperations(resp.body());
+                        ctx.graphqlOps().putAll(found);
+                        if (ctx.graphqlOps().keySet().containsAll(TRACKED_GRAPHQL_OPS)) {
+                            break;
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // Skip unreachable chunk and continue scanning
+                }
+            }
+        } finally {
+            ctx.opsScanned().set(true);
+        }
+    }
+
+    static List<String> selectGraphqlBundleUrls(List<String> allScripts) {
+        List<String> mainFirst = new ArrayList<>();
+        List<String> xWebNext = new ArrayList<>();
+        for (String url : allScripts) {
+            if (url.contains("/main.")) {
+                mainFirst.add(url);
+            } else if (url.contains("/x-web/") && !INDICES_FILE_PATTERN.matcher(url).find()) {
+                xWebNext.add(url);
+            }
+        }
+        mainFirst.addAll(xWebNext);
+        return List.copyOf(mainFirst);
+    }
+
+    static Map<String, GraphqlOperationMeta> parseGraphqlOperations(String scriptText) {
+        Map<String, GraphqlOperationMeta> ops = new LinkedHashMap<>();
+        if (!StringUtils.hasText(scriptText)) {
+            return ops;
+        }
+        Matcher matcher = GRAPHQL_OP_PATTERN.matcher(scriptText);
+        while (matcher.find()) {
+            String queryId = matcher.group(1);
+            String operationName = matcher.group(2);
+            String switchesRaw = matcher.group(3);
+            List<String> switches = new ArrayList<>();
+            if (StringUtils.hasText(switchesRaw)) {
+                Matcher swMatcher = QUOTED_STRING_PATTERN.matcher(switchesRaw);
+                while (swMatcher.find()) {
+                    switches.add(swMatcher.group(1));
+                }
+            }
+            ops.put(operationName, new GraphqlOperationMeta(queryId, List.copyOf(switches)));
+        }
+        return ops;
     }
 
     private String fetchPageText(
@@ -314,6 +421,15 @@ public class XClientTransactionIdProvider {
     static List<String> extractScriptUrls(String html, URI pageUri) {
         Set<String> urls = new LinkedHashSet<>();
 
+        // Support script tags referencing local/relative signing or main bundles first (reverse proxy / test mock)
+        Matcher localScriptMatcher = LOCAL_SCRIPT_SRC_PATTERN.matcher(html);
+        while (localScriptMatcher.find()) {
+            String src = localScriptMatcher.group(1);
+            if (INDICES_FILE_PATTERN.matcher(src).find() || src.contains("/x-web/") || src.contains("/main.")) {
+                urls.add(pageUri.resolve(src).toString());
+            }
+        }
+
         Matcher xWebMatcher = ASSET_XWEB_URL_PATTERN.matcher(html);
         while (xWebMatcher.find()) {
             urls.add(xWebMatcher.group());
@@ -322,9 +438,12 @@ public class XClientTransactionIdProvider {
         while (responsiveMatcher.find()) {
             urls.add(responsiveMatcher.group());
         }
-        Matcher mainMatcher = LEGACY_MAIN_PATTERN.matcher(html);
-        if (mainMatcher.find()) {
-            urls.add(clientWebScriptUrl("main", mainMatcher.group(1)));
+        boolean hasMainUrl = urls.stream().anyMatch(u -> u.contains("/main."));
+        if (!hasMainUrl) {
+            Matcher mainMatcher = LEGACY_MAIN_PATTERN.matcher(html);
+            if (mainMatcher.find()) {
+                urls.add(clientWebScriptUrl("main", mainMatcher.group(1)));
+            }
         }
 
         Map<String, String> hashMap = new LinkedHashMap<>();
@@ -346,15 +465,6 @@ public class XClientTransactionIdProvider {
             urls.add(clientWebScriptUrl(name, entry.getValue() + "a"));
         }
 
-        // Also support script tags referencing local/relative signing bundles (e.g. reverse proxy or test mock)
-        Matcher localScriptMatcher = LOCAL_SCRIPT_SRC_PATTERN.matcher(html);
-        while (localScriptMatcher.find()) {
-            String src = localScriptMatcher.group(1);
-            if (INDICES_FILE_PATTERN.matcher(src).find() || src.contains("/x-web/")) {
-                urls.add(pageUri.resolve(src).toString());
-            }
-        }
-
         if (urls.isEmpty()) {
             throw new IllegalStateException("X web script URLs not found");
         }
@@ -362,13 +472,11 @@ public class XClientTransactionIdProvider {
     }
 
     private List<Integer> parseSigningIndices(
-            String html,
-            URI pageUri,
+            List<String> allScripts,
             HttpClient client,
-            String cookieHeader,
             int timeoutMs
     ) throws Exception {
-        List<String> scripts = extractScriptUrls(html, pageUri);
+        List<String> scripts = allScripts;
         List<String> xWebScripts = scripts.stream().filter(u -> u.contains("/x-web/")).toList();
         if (!xWebScripts.isEmpty()) {
             boolean loggedOut = xWebScripts.stream().anyMatch(u -> LOGGED_OUT_ENTRY_PATTERN.matcher(u).find());
@@ -687,6 +795,15 @@ public class XClientTransactionIdProvider {
         }
     }
 
-    private record CachedKeys(TransactionKeys keys, long fetchedAtMs) {
+    public record GraphqlOperationMeta(String queryId, List<String> featureSwitches) {
+    }
+
+    private record CachedWebContext(
+            TransactionKeys keys,
+            List<String> bundleScriptUrls,
+            ConcurrentHashMap<String, GraphqlOperationMeta> graphqlOps,
+            AtomicBoolean opsScanned,
+            long fetchedAtMs
+    ) {
     }
 }

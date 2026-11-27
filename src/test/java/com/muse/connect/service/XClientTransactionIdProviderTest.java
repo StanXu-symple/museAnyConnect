@@ -18,6 +18,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -201,6 +202,132 @@ class XClientTransactionIdProviderTest {
             assertThat(lastTid.get()).isNotBlank();
             assertThat(settingsCalls.get()).isEqualTo(2);
             assertThat(bootstrapCount.get()).isEqualTo(2);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void parsesGraphqlQueryIdsAndFeatureSwitchesFromBundle() {
+        String js = """
+                369932(e){e.exports={queryId:"liveCreateId123",operationName:"CreateTweet",operationType:"mutation",metadata:{featureSwitches:["rweb_cashtags_composer_attachment_enabled","future_switch_enabled"],fieldToggles:[]}}}
+                808098(e){e.exports={queryId:"liveSearchId456",operationName:"SearchTimeline",operationType:"query",metadata:{featureSwitches:["rweb_video_screen_enabled"]}}}
+                402964(e){e.exports={queryId:"liveUserId789",operationName:"UserByScreenName",operationType:"query",metadata:{featureSwitches:["hidden_profile_subscriptions_enabled"]}}}
+                """;
+        Map<String, XClientTransactionIdProvider.GraphqlOperationMeta> ops =
+                XClientTransactionIdProvider.parseGraphqlOperations(js);
+        assertThat(ops).containsKeys("CreateTweet", "SearchTimeline", "UserByScreenName");
+        assertThat(ops.get("CreateTweet").queryId()).isEqualTo("liveCreateId123");
+        assertThat(ops.get("CreateTweet").featureSwitches())
+                .containsExactly("rweb_cashtags_composer_attachment_enabled", "future_switch_enabled");
+        assertThat(ops.get("SearchTimeline").queryId()).isEqualTo("liveSearchId456");
+        assertThat(ops.get("UserByScreenName").queryId()).isEqualTo("liveUserId789");
+    }
+
+    @Test
+    void dynamicallyDiscoversCreateTweetQueryIdAndRecoversFromRotation404() throws Exception {
+        AtomicInteger mainJsFetches = new AtomicInteger();
+        AtomicReference<String> receivedCreateBody = new AtomicReference<>();
+        AtomicReference<String> receivedCreateTid = new AtomicReference<>();
+
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+        try {
+            server.createContext("/tesla", exchange -> {
+                String html = """
+                        <html><head>
+                        <meta name="twitter-site-verification" content="%s" />
+                        <script src="/responsive-web/client-web/ondemand.s.1234567a.js"></script>
+                        <script src="/responsive-web/client-web/main.abc1234a.js"></script>
+                        </head><body>
+                        <svg id="loading-x-anim-0"><g><path d="M0 0"></path><path d="%s"></path></g></svg>
+                        <svg id="loading-x-anim-1"><g><path d="M0 0"></path><path d="%s"></path></g></svg>
+                        </body></html>
+                        """.formatted(SAMPLE_VK_B64, SAMPLE_ANIM_PATH, SAMPLE_ANIM_PATH);
+                byte[] bytes = html.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().add("Content-Type", "text/html");
+                exchange.sendResponseHeaders(200, bytes.length);
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(bytes);
+                }
+            });
+            server.createContext("/responsive-web/client-web/ondemand.s.1234567a.js", exchange -> {
+                byte[] bytes = SAMPLE_SIGNING_JS.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().add("Content-Type", "application/javascript");
+                exchange.sendResponseHeaders(200, bytes.length);
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(bytes);
+                }
+            });
+            server.createContext("/responsive-web/client-web/main.abc1234a.js", exchange -> {
+                int fetch = mainJsFetches.incrementAndGet();
+                // Simulate queryId rotation between first fetch and refresh after 404
+                String qid = (fetch == 1) ? "staleCreateId001" : "rotatedCreateId002";
+                String js = "e.exports={queryId:\"" + qid + "\",operationName:\"CreateTweet\",operationType:\"mutation\","
+                        + "metadata:{featureSwitches:[\"brand_new_future_switch_enabled\"]}}";
+                byte[] bytes = js.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().add("Content-Type", "application/javascript");
+                exchange.sendResponseHeaders(200, bytes.length);
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(bytes);
+                }
+            });
+            server.createContext("/i/api/graphql/staleCreateId001/CreateTweet", exchange -> {
+                byte[] err = "{\"message\":\"Query not found\"}".getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().add("Content-Type", "application/json");
+                exchange.sendResponseHeaders(404, err.length);
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(err);
+                }
+            });
+            server.createContext("/i/api/graphql/rotatedCreateId002/CreateTweet", exchange -> {
+                receivedCreateTid.set(exchange.getRequestHeaders().getFirst("x-client-transaction-id"));
+                receivedCreateBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+                byte[] ok = "{\"data\":{\"create_tweet\":{\"tweet_results\":{\"result\":{\"rest_id\":\"2026999\"}}}}}"
+                        .getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().add("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, ok.length);
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(ok);
+                }
+            });
+            server.start();
+
+            ObjectMapper mapper = new ObjectMapper();
+            AppProperties props = new AppProperties();
+            HttpClientFactory factory = new HttpClientFactory();
+            RelayActivityBuffer buffer = new RelayActivityBuffer(props);
+            XClientTransactionIdProvider provider = new XClientTransactionIdProvider(mapper);
+
+            ConnectorProfile profile = new ConnectorProfile();
+            profile.setId("x-dyn-create");
+            profile.setName("Dynamic Create");
+            profile.setType(ConnectorType.X);
+            profile.setAuthMode(AuthMode.COOKIE_AUTH);
+            profile.setEnabled(true);
+            ConnectorConfig cfg = new ConnectorConfig();
+            cfg.setApiBaseUrl(baseUrl);
+            cfg.setAuthToken("mock-auth-token");
+            cfg.setCt0("mock-ct0");
+            profile.setConfig(cfg);
+
+            ConnectorService stubService = new ConnectorService(null, buffer, null, null, null) {
+                @Override
+                public ConnectorProfile getEnabledProfile(String id, ConnectorType expectedType) {
+                    return profile;
+                }
+            };
+            XRelayService relayService = new XRelayService(stubService, factory, props, mapper, buffer, provider);
+
+            RelayResponse response = relayService.postTweet("x-dyn-create", "Hello rotated CreateTweet!", null);
+            assertThat(response.success()).isTrue();
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.data().toString()).contains("2026999");
+            assertThat(receivedCreateTid.get()).isNotBlank();
+            assertThat(receivedCreateBody.get())
+                    .contains("\"queryId\":\"rotatedCreateId002\"")
+                    .contains("\"brand_new_future_switch_enabled\":false");
+            assertThat(mainJsFetches.get()).isEqualTo(2);
         } finally {
             server.stop(0);
         }

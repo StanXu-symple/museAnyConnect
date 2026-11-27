@@ -196,7 +196,7 @@
                         <div class="guide-note">
                             <strong>注意事项：</strong>
                             <br>• 网页 Cookie 属于 X 内部非官方会话接口，请控制调用频率避免触发风控；若在浏览器点击<strong>退出登录</strong>或修改密码，旧 <span class="inline-code">auth_token</span> 会立即失效，需重新复制。
-                            <br>• 若 X 更新前端导致发推/搜索等 GraphQL 接口报 404，可在浏览器 <strong>Network（网络）</strong> 面板查看对应请求 URL <span class="inline-code">/i/api/graphql/&lt;queryId&gt;/CreateTweet</span>，把最新 ID 填入上方“自定义 GraphQL Query IDs”即可热更新，无需改代码。
+                            <br>• 中转站会自动从 X 网页脚本动态解析最新的 GraphQL <span class="inline-code">queryId</span> 与特性开关（遇 404 时自动刷新重试）；若需手工固定或热覆盖，可在浏览器 <strong>Network（网络）</strong> 面板查看 <span class="inline-code">/i/api/graphql/&lt;queryId&gt;/CreateTweet</span> 并填入上方“自定义 GraphQL Query IDs”（优先级最高）。
                         </div>
                         <div class="guide-tip">
                             <strong>默认端点：</strong>该模式下“自定义 API Base URL”留空默认请求 <span class="inline-code">https://x.com</span>；在通用转发接口 <span class="inline-code">POST /api/relay/x/{profileId}/request</span> 中可直接透传任意 <span class="inline-code">/i/api/...</span> 路径。
