@@ -18,12 +18,20 @@
         <a class="btn btn-primary btn-sm" th:href="@{/connectors/new(type='X')}">+ X 连接</a>
         <a class="btn btn-primary btn-sm" th:href="@{/connectors/new(type='TELEGRAM')}">+ Telegram</a>
         <a class="btn btn-primary btn-sm" th:href="@{/connectors/new(type='SSH')}">+ SSH 服务器</a>
+        <span th:if="${authEnabled && currentUser != null}" class="nav-user mono" th:text="${currentUser}">admin</span>
+        <form th:if="${authEnabled}" class="inline-form" th:action="@{/logout}" method="post">
+            <input type="hidden" name="_csrf" th:value="${csrfToken}">
+            <button type="submit" class="btn btn-sm btn-topbar">退出</button>
+        </form>
     </nav>
 </header>
 
 <main class="container">
     <div th:if="${message}" class="alert alert-success" th:text="${message}"></div>
     <div th:if="${error}" class="alert alert-error" th:text="${error}"></div>
+    <div th:if="${!authEnabled}" class="alert alert-warn">
+        未开启管理员登录保护：公网或容器部署请通过环境变量 <span class="mono">MUSE_ADMIN_USERNAME</span> 与 <span class="mono">MUSE_ADMIN_PASSWORD</span>（或 <span class="mono">MUSE_ADMIN_PASSWORD_HASH</span>）启用登录鉴权。
+    </div>
     <div th:if="${apiKeyEnabled}" class="alert alert-warn">
         已启用 API Key 鉴权：Muse 调用 <span class="mono">/api/**</span> 接口时请在请求头携带 <span class="mono">X-Muse-Key</span>。
     </div>
@@ -55,13 +63,17 @@
         <div class="card-header">
             <h2 class="card-title">连接器配置管理</h2>
             <div class="btn-group">
-                <a class="btn btn-sm" th:href="@{/connectors/export}">导出 JSON</a>
+                <form th:if="${allowRawExport}" class="inline-form" th:action="@{/connectors/export}" method="post">
+                    <input type="hidden" name="_csrf" th:value="${csrfToken}">
+                    <button type="submit" class="btn btn-sm">导出 JSON</button>
+                </form>
                 <button type="button" class="btn btn-sm" onclick="document.getElementById('importPanel').classList.toggle('hidden')">导入 JSON</button>
             </div>
         </div>
 
         <div id="importPanel" class="section-box hidden">
             <form th:action="@{/connectors/import}" method="post">
+                <input type="hidden" name="_csrf" th:value="${csrfToken}">
                 <div class="form-group">
                     <label for="jsonPayload">粘贴导出的连接器 JSON 数组（纯内存模式重启后可快速恢复）</label>
                     <textarea id="jsonPayload" name="jsonPayload" class="form-control mono" placeholder='[{"id":"ssh-prod","name":"Prod Host","type":"SSH","authMode":"PRIVATE_KEY","enabled":true,"config":{...}}]' required></textarea>
@@ -114,14 +126,17 @@
                     <td>
                         <div class="btn-group">
                             <form class="inline-form" th:action="@{/connectors/{id}/test(id=${c.id})}" method="post">
+                                <input type="hidden" name="_csrf" th:value="${csrfToken}">
                                 <button type="submit" class="btn btn-sm">测试</button>
                             </form>
                             <a class="btn btn-sm" th:href="@{/playground(profileId=${c.id})}">调试</a>
                             <a class="btn btn-sm" th:href="@{/connectors/{id}/edit(id=${c.id})}">编辑</a>
                             <form class="inline-form" th:action="@{/connectors/{id}/toggle(id=${c.id})}" method="post">
+                                <input type="hidden" name="_csrf" th:value="${csrfToken}">
                                 <button type="submit" class="btn btn-sm" th:text="${c.enabled ? '停用' : '启用'}">停用</button>
                             </form>
                             <form class="inline-form" th:action="@{/connectors/{id}/delete(id=${c.id})}" method="post" onsubmit="return confirm('确认删除该连接器配置？');">
+                                <input type="hidden" name="_csrf" th:value="${csrfToken}">
                                 <button type="submit" class="btn btn-danger btn-sm">删除</button>
                             </form>
                         </div>

@@ -89,18 +89,33 @@ java -Xms32m -Xmx128m -jar target/muse-any-connect-0.1.0-SNAPSHOT.jar
 ```
 
 启动后访问：
-- **管理控制台 (Thymeleaf)**：`http://localhost:8080/`
+- **管理控制台 (Thymeleaf)**：`http://localhost:8080/`（开启登录保护后自动跳转 `/login`）
 - **在线调试台 (Playground)**：`http://localhost:8080/playground`
-- **健康检查**：`http://localhost:8080/api/stats`
+- **公开健康检查**：`http://localhost:8080/health`
+- **运行状态与 H2 内存统计**：`http://localhost:8080/api/stats`
 
 ### 可选环境变量 / 配置项 (`application.yml`)
 
 | 配置项 | 环境变量 | 默认值 | 说明 |
 | :--- | :--- | :--- | :--- |
 | `server.port` | `SERVER_PORT` | `8080` | HTTP 服务端口 |
-| `muse.relay.api-key` | `MUSE_RELAY_API_KEY` | `""`（空表示不校验） | 若设置，调用 `/api/**` 需携带请求头 `X-Muse-Key` |
+| `muse.auth.username` | `MUSE_ADMIN_USERNAME` | `admin` | 控制台初始管理员账号 |
+| `muse.auth.password` | `MUSE_ADMIN_PASSWORD` | `""`（空表示未开启登录） | 控制台初始管理员密码（启动时自动用 PBKDF2-HMAC-SHA256 哈希并清除内存明文） |
+| `muse.auth.password-hash` | `MUSE_ADMIN_PASSWORD_HASH` | `""` | 可选：直接注入预计算的 PBKDF2 哈希（`pbkdf2$<iter>$<saltB64>$<hashB64>`），优先级高于明文密码 |
+| `muse.auth.session-ttl-minutes` | `MUSE_AUTH_SESSION_TTL_MINUTES` | `720` | 管理员登录会话有效期（分钟，默认 12 小时） |
+| `muse.auth.max-failed-attempts` | `MUSE_AUTH_MAX_FAILED_ATTEMPTS` | `5` | 单个 IP 连续登录失败触发锁定的阈值 |
+| `muse.auth.lockout-minutes` | `MUSE_AUTH_LOCKOUT_MINUTES` | `15` | 触发防爆破锁定后的冷却时间（分钟） |
+| `muse.auth.allow-raw-export` | `MUSE_ALLOW_RAW_EXPORT` | `true` | 是否允许导出含明文凭据的连接器 JSON（生产可设为 `false` 禁用） |
+| `muse.relay.api-key` | `MUSE_RELAY_API_KEY` | `""`（空表示不校验） | 若设置，机器调用 `/api/**` 需携带请求头 `X-Muse-Key` |
 | `muse.relay.default-timeout-ms` | `MUSE_DEFAULT_TIMEOUT_MS` | `15000` | 外部请求默认超时（毫秒） |
 | `muse.relay.activity-buffer-size` | `MUSE_ACTIVITY_BUFFER_SIZE` | `100` | JVM 环形日志最大条数 |
+
+#### 登录权限与安全机制说明
+- **零 H2 侵入**：登录账号、PBKDF2 密码哈希、有界内存会话（上限 64 条）与 IP 防爆破计数均独立驻留 JVM 内存，不向 H2 写入任何用户或会话表，容器重启后所有历史会话自动失效。
+- **双轨鉴权**：
+  - 配置 `MUSE_ADMIN_PASSWORD`（或 `MUSE_ADMIN_PASSWORD_HASH`）后，控制台页面（`/`、`/connectors/**`、`/playground`）与 `/api/**` 均受保护；未登录访问页面自动跳转 `/login`，未认证调用 `/api/**` 返回 `401`。
+  - 同时配置 `MUSE_RELAY_API_KEY` 时，外部机器/Muse 通过请求头 `X-Muse-Key` 访问 `/api/**`，管理员登录后可在浏览器 Playground 直接调试。
+- **纵深防护**：Cookie 强制 `HttpOnly` + `SameSite=Lax`（反代 HTTPS 下自动开启 `Secure`），所有 Web 变更表单与导出接口强制校验 CSRF Token，并内置按 IP 登录防爆破锁定与安全响应头。
 
 ### Docker 与 GitHub Actions (GHCR) 自动构建部署
 
@@ -118,6 +133,8 @@ docker pull ghcr.io/stanxu-symple/museanyconnect:latest
 docker run -d \
   --name muse-any-connect \
   -p 8080:8080 \
+  -e MUSE_ADMIN_USERNAME="admin" \
+  -e MUSE_ADMIN_PASSWORD="change-me-strong-password" \
   -e MUSE_RELAY_API_KEY="your-secret-key" \
   --restart unless-stopped \
   ghcr.io/stanxu-symple/museanyconnect:latest
@@ -237,6 +254,6 @@ docker run -d --name muse-any-connect -p 8080:8080 muse-any-connect:local
 
 ## 6. 安全提示
 
-1. 生产环境或公网部署时，务必设置 `MUSE_RELAY_API_KEY` 并配合 HTTPS / 内网网关（如 Tailscale、Nginx TLS）使用。
+1. 生产环境或公网部署时，务必同时设置 `MUSE_ADMIN_USERNAME` + `MUSE_ADMIN_PASSWORD`（或 `MUSE_ADMIN_PASSWORD_HASH`）与 `MUSE_RELAY_API_KEY`，并配合 HTTPS / 内网网关（如 Tailscale、Nginx TLS）使用。
 2. 建议为 SSH 连接配置最小权限专用系统账号，并利用 `allowedCommandPrefixes` 限制可执行命令范围。
-3. 控制台界面与导出 JSON 中的密钥字段在普通查看接口默认脱敏（`****`），仅在明确导出或提交更新时处理明文。
+3. 控制台界面与普通查询接口默认脱敏密钥（`****`）；如需彻底禁止导出明文凭据，可将环境变量 `MUSE_ALLOW_RAW_EXPORT` 设为 `false`。

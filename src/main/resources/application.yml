@@ -1,5 +1,6 @@
 server:
   port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
   tomcat:
     threads:
       max: 32
@@ -32,3 +33,11 @@ muse:
     api-key: ${MUSE_RELAY_API_KEY:}
     default-timeout-ms: ${MUSE_DEFAULT_TIMEOUT_MS:15000}
     activity-buffer-size: ${MUSE_ACTIVITY_BUFFER_SIZE:100}
+  auth:
+    username: ${MUSE_ADMIN_USERNAME:admin}
+    password: ${MUSE_ADMIN_PASSWORD:}
+    password-hash: ${MUSE_ADMIN_PASSWORD_HASH:}
+    session-ttl-minutes: ${MUSE_AUTH_SESSION_TTL_MINUTES:720}
+    max-failed-attempts: ${MUSE_AUTH_MAX_FAILED_ATTEMPTS:5}
+    lockout-minutes: ${MUSE_AUTH_LOCKOUT_MINUTES:15}
+    allow-raw-export: ${MUSE_ALLOW_RAW_EXPORT:true}

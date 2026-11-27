@@ -15,6 +15,11 @@
     <nav class="nav-links">
         <a class="nav-link" th:href="@{/}">控制台</a>
         <a class="nav-link" th:href="@{/playground}">在线调试</a>
+        <span th:if="${authEnabled && currentUser != null}" class="nav-user mono" th:text="${currentUser}">admin</span>
+        <form th:if="${authEnabled}" class="inline-form" th:action="@{/logout}" method="post">
+            <input type="hidden" name="_csrf" th:value="${csrfToken}">
+            <button type="submit" class="btn btn-sm btn-topbar">退出</button>
+        </form>
     </nav>
 </header>
 
@@ -28,6 +33,7 @@
         </div>
 
         <form th:action="@{/connectors/save}" th:object="${profile}" method="post">
+            <input type="hidden" name="_csrf" th:value="${csrfToken}">
             <input type="hidden" name="editing" th:value="${editing}">
 
             <div class="form-grid">

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理员登录 - MuseAnyConnect</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<header class="topbar">
+    <a class="brand" th:href="@{/}">
+        <span>MuseAnyConnect</span>
+        <span class="brand-tag">HTTP Relay</span>
+    </a>
+</header>
+
+<main class="login-wrap">
+    <div class="card login-card">
+        <div class="card-header" style="margin-bottom: 12px;">
+            <h1 class="card-title" style="font-size: 1.2rem;">控制台管理员登录</h1>
+        </div>
+        <p class="muted" style="margin-top: 0; margin-bottom: 18px;">
+            凭据由环境变量安全注入，会话仅驻留服务端内存（不写入 H2）。
+        </p>
+
+        <div th:if="${message}" class="alert alert-success" th:text="${message}"></div>
+        <div th:if="${error}" class="alert alert-error" th:text="${error}"></div>
+
+        <form th:action="@{/login}" method="post" autocomplete="on">
+            <input type="hidden" name="next" th:value="${next}">
+
+            <div class="form-group">
+                <label for="username">管理员账号</label>
+                <input id="username" name="username" type="text" class="form-control"
+                       th:value="${username}" autocomplete="username" required autofocus
+                       placeholder="输入环境变量配置的管理员账号">
+            </div>
+
+            <div class="form-group">
+                <label for="password">登录密码</label>
+                <input id="password" name="password" type="password" class="form-control"
+                       autocomplete="current-password" required
+                       placeholder="输入登录密码">
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 10px 14px; margin-top: 6px;">
+                登录控制台
+            </button>
+        </form>
+    </div>
+</main>
+</body>
+</html>

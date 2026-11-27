@@ -4,9 +4,12 @@ import com.muse.connect.model.ConnectorProfile;
 import com.muse.connect.model.RelayResponse;
 import com.muse.connect.model.SystemStats;
 import com.muse.connect.repository.RelayActivityBuffer;
+import com.muse.connect.service.AdminAuthService;
+import com.muse.connect.service.ConnectorException;
 import com.muse.connect.service.ConnectorService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -26,10 +29,16 @@ public class ConnectorApiController {
 
     private final ConnectorService connectorService;
     private final RelayActivityBuffer activityBuffer;
+    private final AdminAuthService adminAuthService;
 
-    public ConnectorApiController(ConnectorService connectorService, RelayActivityBuffer activityBuffer) {
+    public ConnectorApiController(
+            ConnectorService connectorService,
+            RelayActivityBuffer activityBuffer,
+            AdminAuthService adminAuthService
+    ) {
         this.connectorService = connectorService;
         this.activityBuffer = activityBuffer;
+        this.adminAuthService = adminAuthService;
     }
 
     @GetMapping("/connectors")
@@ -66,8 +75,12 @@ public class ConnectorApiController {
 
     @GetMapping("/connectors/export")
     public ResponseEntity<List<ConnectorProfile>> exportJson() {
+        if (!adminAuthService.isAllowRawExport()) {
+            throw new ConnectorException(HttpStatus.FORBIDDEN, "Raw credential export is disabled (MUSE_ALLOW_RAW_EXPORT=false)");
+        }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=muse-connectors.json")
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(connectorService.exportAllRaw());
     }

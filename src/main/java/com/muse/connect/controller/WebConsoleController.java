@@ -9,9 +9,11 @@ import com.muse.connect.model.ConnectorProfile;
 import com.muse.connect.model.ConnectorType;
 import com.muse.connect.model.RelayResponse;
 import com.muse.connect.repository.RelayActivityBuffer;
+import com.muse.connect.service.AdminAuthService;
 import com.muse.connect.service.ConnectorException;
 import com.muse.connect.service.ConnectorService;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -33,17 +35,20 @@ public class WebConsoleController {
     private final RelayActivityBuffer activityBuffer;
     private final ObjectMapper objectMapper;
     private final AppProperties appProperties;
+    private final AdminAuthService adminAuthService;
 
     public WebConsoleController(
             ConnectorService connectorService,
             RelayActivityBuffer activityBuffer,
             ObjectMapper objectMapper,
-            AppProperties appProperties
+            AppProperties appProperties,
+            AdminAuthService adminAuthService
     ) {
         this.connectorService = connectorService;
         this.activityBuffer = activityBuffer;
         this.objectMapper = objectMapper;
         this.appProperties = appProperties;
+        this.adminAuthService = adminAuthService;
     }
 
     @GetMapping("/")
@@ -144,10 +149,14 @@ public class WebConsoleController {
         return "redirect:/";
     }
 
-    @GetMapping("/connectors/export")
+    @PostMapping("/connectors/export")
     public ResponseEntity<List<ConnectorProfile>> exportFromConsole() {
+        if (!adminAuthService.isAllowRawExport()) {
+            throw new ConnectorException(HttpStatus.FORBIDDEN, "当前配置已禁止导出明文凭据 (MUSE_ALLOW_RAW_EXPORT=false)");
+        }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=muse-connectors.json")
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(connectorService.exportAllRaw());
     }
