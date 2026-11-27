@@ -23,7 +23,12 @@
 
 ```text
 museAnyConnect/
+├── .github/workflows/
+│   └── docker-publish.yml           # GitHub Actions 自动测试、构建并推送 GHCR 多架构镜像
 ├── AGENTS.md                        # 全局项目约定与 AI 协作规范
+├── Dockerfile                       # 多阶段轻量级 JDK 17 镜像构建配置
+├── .dockerignore                    # Docker 构建上下文忽略规则
+├── docker-compose.yml               # 基于 GHCR 镜像的 Docker Compose 部署模板
 ├── README.md                        # 全局项目文档（本文件）
 ├── pom.xml                          # Maven 构建配置
 └── src/
@@ -96,6 +101,43 @@ java -Xms32m -Xmx128m -jar target/muse-any-connect-0.1.0-SNAPSHOT.jar
 | `muse.relay.api-key` | `MUSE_RELAY_API_KEY` | `""`（空表示不校验） | 若设置，调用 `/api/**` 需携带请求头 `X-Muse-Key` |
 | `muse.relay.default-timeout-ms` | `MUSE_DEFAULT_TIMEOUT_MS` | `15000` | 外部请求默认超时（毫秒） |
 | `muse.relay.activity-buffer-size` | `MUSE_ACTIVITY_BUFFER_SIZE` | `100` | JVM 环形日志最大条数 |
+
+### Docker 与 GitHub Actions (GHCR) 自动构建部署
+
+每次推送代码到 `main` 分支（或推送 `v*.*.*` 标签）时，GitHub Actions（`.github/workflows/docker-publish.yml`）会自动：
+1. 执行 `mvn test` 验证全部单元测试与集成测试；
+2. 构建多架构镜像（`linux/amd64` + `linux/arm64`）并推送至 GitHub Container Registry（GHCR）：
+   - 镜像地址：`ghcr.io/stanxu-symple/museanyconnect:latest`
+   - 同时生成 `main`、`sha-<commit>` 以及语义化版本标签。
+
+#### 直接拉取并运行
+
+```bash
+docker pull ghcr.io/stanxu-symple/museanyconnect:latest
+
+docker run -d \
+  --name muse-any-connect \
+  -p 8080:8080 \
+  -e MUSE_RELAY_API_KEY="your-secret-key" \
+  --restart unless-stopped \
+  ghcr.io/stanxu-symple/museanyconnect:latest
+```
+
+或使用项目自带的 `docker-compose.yml`：
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+> **提示（首次拉取权限）**：GHCR 首次由 Actions 推送生成的包默认可能是私有状态。如需免登录直接 `docker pull`，请打开 GitHub 仓库右侧 **Packages** → 点击 `museanyconnect` → **Package settings** → **Change visibility** 设为 **Public**；若保持私有，需先用带 `read:packages` 权限的 PAT 执行 `echo "<PAT>" | docker login ghcr.io -u StanXu-symple --password-stdin`。
+
+#### 本地自行构建镜像
+
+```bash
+docker build -t muse-any-connect:local .
+docker run -d --name muse-any-connect -p 8080:8080 muse-any-connect:local
+```
 
 ---
 

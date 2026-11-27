@@ -1,0 +1,13 @@
+services:
+  muse-any-connect:
+    image: ghcr.io/stanxu-symple/museanyconnect:latest
+    container_name: muse-any-connect
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
+    environment:
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      MUSE_RELAY_API_KEY: ${MUSE_RELAY_API_KEY:-}
+      MUSE_DEFAULT_TIMEOUT_MS: ${MUSE_DEFAULT_TIMEOUT_MS:-15000}
+      MUSE_ACTIVITY_BUFFER_SIZE: ${MUSE_ACTIVITY_BUFFER_SIZE:-100}
+      JAVA_OPTS: ${JAVA_OPTS:--Xms32m -Xmx128m}
