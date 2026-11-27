@@ -30,12 +30,12 @@ spring:
 
 muse:
   relay:
-    api-key: ${MUSE_RELAY_API_KEY:}
+    api-key: ${MUSE_RELAY_API_KEY:123456789}
     default-timeout-ms: ${MUSE_DEFAULT_TIMEOUT_MS:15000}
     activity-buffer-size: ${MUSE_ACTIVITY_BUFFER_SIZE:100}
   auth:
     username: ${MUSE_ADMIN_USERNAME:admin}
-    password: ${MUSE_ADMIN_PASSWORD:}
+    password: ${MUSE_ADMIN_PASSWORD:123456}
     password-hash: ${MUSE_ADMIN_PASSWORD_HASH:}
     session-ttl-minutes: ${MUSE_AUTH_SESSION_TTL_MINUTES:720}
     max-failed-attempts: ${MUSE_AUTH_MAX_FAILED_ATTEMPTS:5}

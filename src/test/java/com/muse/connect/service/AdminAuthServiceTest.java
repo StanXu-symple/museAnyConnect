@@ -1,5 +1,6 @@
 package com.muse.connect.service;
 
+import com.muse.connect.config.AppProperties;
 import com.muse.connect.config.AuthProperties;
 import com.muse.connect.service.AdminAuthService.AdminSession;
 import com.muse.connect.service.AdminAuthService.AuthResult;
@@ -79,5 +80,26 @@ class AdminAuthServiceTest {
         assertThat(s3).isNotNull();
         assertThat(service.activeSessionCount()).isEqualTo(2);
         assertThat(service.resolveSession(s3.id())).isPresent();
+    }
+
+    @Test
+    void fallsBackToHardcodedDefaultsWhenUnconfiguredOrBlank() {
+        AuthProperties blankAuth = new AuthProperties();
+        blankAuth.setPassword("   ");
+        AdminAuthService service = new AdminAuthService(blankAuth);
+
+        assertThat(service.isEnabled()).isTrue();
+        assertThat(blankAuth.getPassword()).isEmpty();
+        assertThat(service.authenticate("admin", AuthProperties.DEFAULT_PASSWORD, "127.0.0.1").status())
+                .isEqualTo(AuthResult.Status.SUCCESS);
+        assertThat(service.authenticate("admin", "wrong", "127.0.0.1").status())
+                .isEqualTo(AuthResult.Status.INVALID_CREDENTIALS);
+
+        AppProperties appProps = new AppProperties();
+        assertThat(appProps.getApiKey()).isEqualTo("123456789");
+        appProps.setApiKey("   ");
+        assertThat(appProps.getApiKey()).isEqualTo("123456789");
+        appProps.setApiKey("custom-key");
+        assertThat(appProps.getApiKey()).isEqualTo("custom-key");
     }
 }

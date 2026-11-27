@@ -100,13 +100,13 @@ java -Xms32m -Xmx128m -jar target/muse-any-connect-0.1.0-SNAPSHOT.jar
 | :--- | :--- | :--- | :--- |
 | `server.port` | `SERVER_PORT` | `8080` | HTTP 服务端口 |
 | `muse.auth.username` | `MUSE_ADMIN_USERNAME` | `admin` | 控制台初始管理员账号 |
-| `muse.auth.password` | `MUSE_ADMIN_PASSWORD` | `""`（空表示未开启登录） | 控制台初始管理员密码（启动时自动用 PBKDF2-HMAC-SHA256 哈希并清除内存明文） |
+| `muse.auth.password` | `MUSE_ADMIN_PASSWORD` | `123456`（兜底默认值） | 控制台初始管理员密码（未配置或留空时兜底为 `123456`；启动时自动用 PBKDF2-HMAC-SHA256 哈希并清除内存明文） |
 | `muse.auth.password-hash` | `MUSE_ADMIN_PASSWORD_HASH` | `""` | 可选：直接注入预计算的 PBKDF2 哈希（`pbkdf2$<iter>$<saltB64>$<hashB64>`），优先级高于明文密码 |
 | `muse.auth.session-ttl-minutes` | `MUSE_AUTH_SESSION_TTL_MINUTES` | `720` | 管理员登录会话有效期（分钟，默认 12 小时） |
 | `muse.auth.max-failed-attempts` | `MUSE_AUTH_MAX_FAILED_ATTEMPTS` | `5` | 单个 IP 连续登录失败触发锁定的阈值 |
 | `muse.auth.lockout-minutes` | `MUSE_AUTH_LOCKOUT_MINUTES` | `15` | 触发防爆破锁定后的冷却时间（分钟） |
 | `muse.auth.allow-raw-export` | `MUSE_ALLOW_RAW_EXPORT` | `true` | 是否允许导出含明文凭据的连接器 JSON（生产可设为 `false` 禁用） |
-| `muse.relay.api-key` | `MUSE_RELAY_API_KEY` | `""`（空表示不校验） | 若设置，机器调用 `/api/**` 需携带请求头 `X-Muse-Key` |
+| `muse.relay.api-key` | `MUSE_RELAY_API_KEY` | `123456789`（兜底默认值） | 机器调用 `/api/**` 请求头 `X-Muse-Key` 校验密钥（未配置或留空时兜底为 `123456789`） |
 | `muse.relay.default-timeout-ms` | `MUSE_DEFAULT_TIMEOUT_MS` | `15000` | 外部请求默认超时（毫秒） |
 | `muse.relay.activity-buffer-size` | `MUSE_ACTIVITY_BUFFER_SIZE` | `100` | JVM 环形日志最大条数 |
 

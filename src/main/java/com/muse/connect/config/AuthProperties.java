@@ -5,8 +5,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "muse.auth")
 public class AuthProperties {
 
+    public static final String DEFAULT_PASSWORD = "123456";
+
     private String username = "admin";
-    private String password = "";
+    private String password = DEFAULT_PASSWORD;
     private String passwordHash = "";
     private int sessionTtlMinutes = 720;
     private int maxFailedAttempts = 5;
@@ -28,6 +30,10 @@ public class AuthProperties {
 
     public void setPassword(String password) {
         this.password = password == null ? "" : password;
+    }
+
+    public void clearPassword() {
+        this.password = "";
     }
 
     public String getPasswordHash() {

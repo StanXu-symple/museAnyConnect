@@ -5,7 +5,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "muse.relay")
 public class AppProperties {
 
-    private String apiKey = "";
+    public static final String DEFAULT_API_KEY = "123456789";
+
+    private String apiKey = DEFAULT_API_KEY;
     private int defaultTimeoutMs = 15000;
     private int activityBufferSize = 100;
 
@@ -14,7 +16,7 @@ public class AppProperties {
     }
 
     public void setApiKey(String apiKey) {
-        this.apiKey = apiKey == null ? "" : apiKey;
+        this.apiKey = (apiKey == null || apiKey.isBlank()) ? DEFAULT_API_KEY : apiKey.trim();
     }
 
     public int getDefaultTimeoutMs() {

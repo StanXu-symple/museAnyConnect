@@ -59,23 +59,23 @@ public class AdminAuthService {
             this.passwordSalt = parsed.salt();
             this.passwordHash = parsed.hash();
             this.enabled = true;
-            properties.setPassword("");
+            properties.clearPassword();
             log.info("Admin login authentication ENABLED for user '{}' using PBKDF2 password hash.", adminUsername);
-        } else if (StringUtils.hasText(properties.getPassword())) {
+        } else {
+            boolean usingDefaultPassword = !StringUtils.hasText(properties.getPassword());
+            String effectivePassword = usingDefaultPassword ? AuthProperties.DEFAULT_PASSWORD : properties.getPassword();
             byte[] salt = randomBytes(SALT_BYTES);
             this.pbkdf2Iterations = DEFAULT_PBKDF2_ITERATIONS;
             this.passwordSalt = salt;
-            this.passwordHash = deriveKey(properties.getPassword().toCharArray(), salt, DEFAULT_PBKDF2_ITERATIONS);
+            this.passwordHash = deriveKey(effectivePassword.toCharArray(), salt, DEFAULT_PBKDF2_ITERATIONS);
             this.enabled = true;
             // Clear plaintext copy from config properties after hashing into memory
-            properties.setPassword("");
-            log.info("Admin login authentication ENABLED for user '{}' (password hashed in memory via PBKDF2-HMAC-SHA256).", adminUsername);
-        } else {
-            this.pbkdf2Iterations = DEFAULT_PBKDF2_ITERATIONS;
-            this.passwordSalt = new byte[0];
-            this.passwordHash = new byte[0];
-            this.enabled = false;
-            log.warn("Admin login authentication is DISABLED. Set MUSE_ADMIN_USERNAME and MUSE_ADMIN_PASSWORD (or MUSE_ADMIN_PASSWORD_HASH) before exposing this service.");
+            properties.clearPassword();
+            if (usingDefaultPassword || AuthProperties.DEFAULT_PASSWORD.equals(effectivePassword)) {
+                log.warn("Admin login authentication ENABLED for user '{}' using default fallback password. Override MUSE_ADMIN_PASSWORD or MUSE_ADMIN_PASSWORD_HASH before exposing publicly.", adminUsername);
+            } else {
+                log.info("Admin login authentication ENABLED for user '{}' (password hashed in memory via PBKDF2-HMAC-SHA256).", adminUsername);
+            }
         }
     }
 

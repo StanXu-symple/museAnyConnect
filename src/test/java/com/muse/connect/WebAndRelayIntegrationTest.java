@@ -1,25 +1,33 @@
 package com.muse.connect;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.muse.connect.config.AppProperties;
+import com.muse.connect.config.AuthProperties;
+import com.muse.connect.config.RelayAuthFilter;
 import com.muse.connect.model.AuthMode;
 import com.muse.connect.model.ConnectorConfig;
 import com.muse.connect.model.ConnectorProfile;
 import com.muse.connect.model.ConnectorType;
 import com.sun.net.httpserver.HttpServer;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -35,6 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class WebAndRelayIntegrationTest {
 
+    private static final Pattern CSRF_PATTERN = Pattern.compile("name=\"_csrf\" value=\"([^\"]+)\"");
     private static HttpServer mockUpstream;
     private static String mockBaseUrl;
     private static final AtomicReference<String> lastAuthHeader = new AtomicReference<>();
@@ -78,7 +87,11 @@ class WebAndRelayIntegrationTest {
 
     @Test
     void relaysXAndTelegramRequestsAndRendersThymeleafPages() throws Exception {
-        // 1. Create X OAuth1a profile
+        // 0. Default hardcoded fallback credentials protect API & console when env vars are unset
+        mockMvc.perform(get("/api/stats")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/")).andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("/login"));
+
+        // 1. Create X OAuth1a profile using default fallback X-Muse-Key (123456789)
         ConnectorProfile xProfile = new ConnectorProfile();
         xProfile.setId("x-mock");
         xProfile.setName("Mock X");
@@ -93,6 +106,7 @@ class WebAndRelayIntegrationTest {
         xProfile.setConfig(xCfg);
 
         mockMvc.perform(post("/api/connectors")
+                        .header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(xProfile)))
                 .andExpect(status().isOk())
@@ -100,6 +114,7 @@ class WebAndRelayIntegrationTest {
 
         // 2. Relay X tweet
         mockMvc.perform(post("/api/relay/x/x-mock/tweet")
+                        .header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"text\":\"Hello Muse!\"}"))
                 .andExpect(status().isOk())
@@ -122,35 +137,54 @@ class WebAndRelayIntegrationTest {
         tgProfile.setConfig(tgCfg);
 
         mockMvc.perform(post("/api/connectors")
+                        .header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(tgProfile)))
                 .andExpect(status().isOk());
 
         // 4. Relay Telegram sendMessage using defaultChatId
         mockMvc.perform(post("/api/relay/telegram/tg-mock/send")
+                        .header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"text\":\"Ping from Muse\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.result.message_id").value(77));
 
-        // 5. Thymeleaf UI pages render cleanly
-        mockMvc.perform(get("/"))
+        // 5. Log in using default fallback admin credentials (admin / 123456) and render Thymeleaf UI pages
+        MvcResult loginResult = mockMvc.perform(post("/login")
+                        .param("username", "admin")
+                        .param("password", AuthProperties.DEFAULT_PASSWORD))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/"))
+                .andReturn();
+        String setCookie = loginResult.getResponse().getHeader(HttpHeaders.SET_COOKIE);
+        assertThat(setCookie).isNotNull();
+        Cookie sessionCookie = new Cookie(
+                RelayAuthFilter.SESSION_COOKIE_NAME,
+                extractCookieValue(setCookie, RelayAuthFilter.SESSION_COOKIE_NAME)
+        );
+
+        MvcResult homeResult = mockMvc.perform(get("/").cookie(sessionCookie))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("MuseAnyConnect")))
                 .andExpect(content().string(containsString("Mock X")))
-                .andExpect(content().string(containsString("Mock TG")));
+                .andExpect(content().string(containsString("Mock TG")))
+                .andReturn();
+        String csrfToken = extractCsrfToken(homeResult.getResponse().getContentAsString());
 
-        mockMvc.perform(get("/connectors/new").param("type", "SSH"))
+        mockMvc.perform(get("/connectors/new").param("type", "SSH").cookie(sessionCookie))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("SSH 远程服务器配置")));
 
-        mockMvc.perform(get("/playground").param("profileId", "x-mock"))
+        mockMvc.perform(get("/playground").param("profileId", "x-mock").cookie(sessionCookie))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Muse HTTP Relay Playground")));
 
         // 6. Save connector via Thymeleaf form POST
         mockMvc.perform(post("/connectors/save")
+                        .cookie(sessionCookie)
+                        .param("_csrf", csrfToken)
                         .param("id", "ssh-ui-test")
                         .param("name", "UI SSH")
                         .param("type", "SSH")
@@ -164,8 +198,23 @@ class WebAndRelayIntegrationTest {
                 .andExpect(redirectedUrl("/"));
 
         // Cleanup
-        mockMvc.perform(delete("/api/connectors/x-mock")).andExpect(status().isOk());
-        mockMvc.perform(delete("/api/connectors/tg-mock")).andExpect(status().isOk());
-        mockMvc.perform(delete("/api/connectors/ssh-ui-test")).andExpect(status().isOk());
+        mockMvc.perform(delete("/api/connectors/x-mock").header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)).andExpect(status().isOk());
+        mockMvc.perform(delete("/api/connectors/tg-mock").header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)).andExpect(status().isOk());
+        mockMvc.perform(delete("/api/connectors/ssh-ui-test").header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)).andExpect(status().isOk());
+    }
+
+    private String extractCookieValue(String setCookieHeader, String name) {
+        String prefix = name + "=";
+        int start = setCookieHeader.indexOf(prefix);
+        assertThat(start).isGreaterThanOrEqualTo(0);
+        int valueStart = start + prefix.length();
+        int end = setCookieHeader.indexOf(';', valueStart);
+        return end > 0 ? setCookieHeader.substring(valueStart, end) : setCookieHeader.substring(valueStart);
+    }
+
+    private String extractCsrfToken(String html) {
+        Matcher matcher = CSRF_PATTERN.matcher(html);
+        assertThat(matcher.find()).isTrue();
+        return matcher.group(1);
     }
 }
