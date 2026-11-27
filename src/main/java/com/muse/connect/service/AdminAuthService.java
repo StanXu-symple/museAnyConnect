@@ -1,6 +1,10 @@
 package com.muse.connect.service;
 
 import com.muse.connect.config.AuthProperties;
+import com.muse.connect.constant.ExceptionMessageConstants;
+import com.muse.connect.constant.LogMessageConstants;
+import com.muse.connect.constant.RouteConstants;
+import com.muse.connect.constant.SecurityConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -31,7 +35,7 @@ public class AdminAuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AdminAuthService.class);
 
-    public static final String HASH_PREFIX = "pbkdf2";
+    public static final String HASH_PREFIX = SecurityConstants.PBKDF2_HASH_PREFIX;
     public static final int DEFAULT_PBKDF2_ITERATIONS = 120_000;
     private static final int MIN_PBKDF2_ITERATIONS = 10_000;
     private static final int SALT_BYTES = 16;
@@ -51,7 +55,9 @@ public class AdminAuthService {
 
     public AdminAuthService(AuthProperties properties) {
         this.properties = properties;
-        this.adminUsername = StringUtils.hasText(properties.getUsername()) ? properties.getUsername().trim() : "admin";
+        this.adminUsername = StringUtils.hasText(properties.getUsername())
+                ? properties.getUsername().trim()
+                : SecurityConstants.DEFAULT_ADMIN_USERNAME;
 
         if (StringUtils.hasText(properties.getPasswordHash())) {
             ParsedHash parsed = parseHash(properties.getPasswordHash());
@@ -60,7 +66,7 @@ public class AdminAuthService {
             this.passwordHash = parsed.hash();
             this.enabled = true;
             properties.clearPassword();
-            log.info("Admin login authentication ENABLED for user '{}' using PBKDF2 password hash.", adminUsername);
+            log.info(LogMessageConstants.AUTH_ENABLED_PREHASHED, adminUsername);
         } else {
             boolean usingDefaultPassword = !StringUtils.hasText(properties.getPassword());
             String effectivePassword = usingDefaultPassword ? AuthProperties.DEFAULT_PASSWORD : properties.getPassword();
@@ -72,9 +78,9 @@ public class AdminAuthService {
             // 在内存中完成哈希派生后立即清除配置对象里的明文密码副本
             properties.clearPassword();
             if (usingDefaultPassword || AuthProperties.DEFAULT_PASSWORD.equals(effectivePassword)) {
-                log.warn("Admin login authentication ENABLED for user '{}' using default fallback password. Override MUSE_ADMIN_PASSWORD or MUSE_ADMIN_PASSWORD_HASH before exposing publicly.", adminUsername);
+                log.warn(LogMessageConstants.AUTH_ENABLED_DEFAULT_PASSWORD_WARN, adminUsername);
             } else {
-                log.info("Admin login authentication ENABLED for user '{}' (password hashed in memory via PBKDF2-HMAC-SHA256).", adminUsername);
+                log.info(LogMessageConstants.AUTH_ENABLED_IN_MEMORY_HASH, adminUsername);
             }
         }
     }
@@ -116,13 +122,13 @@ public class AdminAuthService {
         if (!enabled) {
             return AuthResult.invalid();
         }
-        String ipKey = StringUtils.hasText(clientIp) ? clientIp.trim() : "unknown";
+        String ipKey = StringUtils.hasText(clientIp) ? clientIp.trim() : SecurityConstants.UNKNOWN_CLIENT_IP;
         long lockedSeconds = getLockoutRemainingSeconds(ipKey);
         if (lockedSeconds > 0) {
             return AuthResult.locked(lockedSeconds);
         }
 
-        String candidateUser = username == null ? "" : username.trim();
+        String candidateUser = username == null ? RouteConstants.EMPTY : username.trim();
         char[] candidatePass = password == null ? new char[0] : password.toCharArray();
 
         // 即使用户名不匹配也始终执行 PBKDF2 计算，防止时序侧信道攻击
@@ -179,16 +185,19 @@ public class AdminAuthService {
 
     public static String hashPassword(String plainPassword, int iterations) {
         if (!StringUtils.hasText(plainPassword)) {
-            throw new IllegalArgumentException("Password must not be blank");
+            throw new IllegalArgumentException(ExceptionMessageConstants.AUTH_PASSWORD_BLANK);
         }
         if (iterations < MIN_PBKDF2_ITERATIONS) {
-            throw new IllegalArgumentException("PBKDF2 iterations must be at least " + MIN_PBKDF2_ITERATIONS);
+            throw new IllegalArgumentException(
+                    ExceptionMessageConstants.AUTH_PBKDF2_ITERATIONS_MIN_PREFIX + MIN_PBKDF2_ITERATIONS);
         }
         byte[] salt = new byte[SALT_BYTES];
         new SecureRandom().nextBytes(salt);
         byte[] derived = deriveKey(plainPassword.toCharArray(), salt, iterations);
         Base64.Encoder encoder = Base64.getEncoder();
-        return HASH_PREFIX + "$" + iterations + "$" + encoder.encodeToString(salt) + "$" + encoder.encodeToString(derived);
+        return HASH_PREFIX + SecurityConstants.PBKDF2_DELIMITER + iterations
+                + SecurityConstants.PBKDF2_DELIMITER + encoder.encodeToString(salt)
+                + SecurityConstants.PBKDF2_DELIMITER + encoder.encodeToString(derived);
     }
 
     private AdminSession createSession(String username) {
@@ -253,7 +262,7 @@ public class AdminAuthService {
         });
 
         if (updated != null && updated.lockedUntil != null && now.isBefore(updated.lockedUntil)) {
-            log.warn("Admin login temporarily locked for IP '{}' after {} failed attempts.", ipKey, updated.attempts);
+            log.warn(LogMessageConstants.AUTH_IP_LOCKED_WARN, ipKey, updated.attempts);
             return Math.max(1, Duration.between(now, updated.lockedUntil).getSeconds());
         }
         return 0;
@@ -277,35 +286,35 @@ public class AdminAuthService {
     private static byte[] deriveKey(char[] password, byte[] salt, int iterations) {
         PBEKeySpec spec = new PBEKeySpec(password, salt, iterations, KEY_BITS);
         try {
-            SecretKeyFactory skf = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            SecretKeyFactory skf = SecretKeyFactory.getInstance(SecurityConstants.PBKDF2_ALGORITHM);
             return skf.generateSecret(spec).getEncoded();
         } catch (GeneralSecurityException ex) {
-            throw new IllegalStateException("PBKDF2WithHmacSHA256 is unavailable in this JVM", ex);
+            throw new IllegalStateException(ExceptionMessageConstants.AUTH_PBKDF2_UNAVAILABLE, ex);
         } finally {
             spec.clearPassword();
         }
     }
 
     private static ParsedHash parseHash(String encoded) {
-        String[] parts = encoded.split("\\$");
+        String[] parts = encoded.split(SecurityConstants.PBKDF2_SPLIT_REGEX);
         if (parts.length != 4 || !HASH_PREFIX.equals(parts[0])) {
-            throw new IllegalArgumentException(
-                    "Invalid muse.auth.password-hash format. Expected: pbkdf2$<iterations>$<saltBase64>$<hashBase64>");
+            throw new IllegalArgumentException(ExceptionMessageConstants.AUTH_INVALID_HASH_FORMAT);
         }
         int iterations;
         try {
             iterations = Integer.parseInt(parts[1]);
         } catch (NumberFormatException ex) {
-            throw new IllegalArgumentException("Invalid PBKDF2 iteration count in muse.auth.password-hash", ex);
+            throw new IllegalArgumentException(ExceptionMessageConstants.AUTH_INVALID_HASH_ITERATIONS, ex);
         }
         if (iterations < MIN_PBKDF2_ITERATIONS) {
-            throw new IllegalArgumentException("PBKDF2 iteration count must be >= " + MIN_PBKDF2_ITERATIONS);
+            throw new IllegalArgumentException(
+                    ExceptionMessageConstants.AUTH_HASH_ITERATIONS_MIN_PREFIX + MIN_PBKDF2_ITERATIONS);
         }
         Base64.Decoder decoder = Base64.getDecoder();
         byte[] salt = decoder.decode(parts[2]);
         byte[] hash = decoder.decode(parts[3]);
         if (salt.length < 8 || hash.length < 16) {
-            throw new IllegalArgumentException("Invalid salt or hash length in muse.auth.password-hash");
+            throw new IllegalArgumentException(ExceptionMessageConstants.AUTH_INVALID_SALT_OR_HASH_LEN);
         }
         return new ParsedHash(iterations, salt, hash);
     }

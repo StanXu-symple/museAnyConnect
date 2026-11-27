@@ -1,11 +1,13 @@
 package com.muse.connect.config;
 
+import com.muse.connect.constant.SecurityConstants;
+import com.muse.connect.constant.StorageConstants;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-@ConfigurationProperties(prefix = "muse.relay")
+@ConfigurationProperties(prefix = StorageConstants.PREFIX_MUSE_RELAY)
 public class AppProperties {
 
-    public static final String DEFAULT_API_KEY = "123456789";
+    public static final String DEFAULT_API_KEY = SecurityConstants.DEFAULT_API_KEY;
 
     private String apiKey = DEFAULT_API_KEY;
     private int defaultTimeoutMs = 15000;

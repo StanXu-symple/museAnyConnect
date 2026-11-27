@@ -1,6 +1,8 @@
 package com.muse.connect.repository;
 
 import com.muse.connect.config.AppProperties;
+import com.muse.connect.constant.HttpConstants;
+import com.muse.connect.constant.RouteConstants;
 import com.muse.connect.model.ConnectorType;
 import com.muse.connect.model.RelayExecutionRecord;
 import org.springframework.stereotype.Component;
@@ -31,7 +33,9 @@ public class RelayActivityBuffer {
             long durationMs,
             String summary
     ) {
-        String safeSummary = summary == null ? "" : (summary.length() > 160 ? summary.substring(0, 157) + "..." : summary);
+        String safeSummary = summary == null
+                ? RouteConstants.EMPTY
+                : (summary.length() > 160 ? summary.substring(0, 157) + HttpConstants.ELLIPSIS : summary);
         deque.addFirst(new RelayExecutionRecord(
                 System.currentTimeMillis(),
                 profileId,

@@ -1,5 +1,7 @@
 package com.muse.connect.config;
 
+import com.muse.connect.constant.ExceptionMessageConstants;
+import com.muse.connect.constant.StorageConstants;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -18,8 +20,6 @@ import java.nio.file.Path;
 @Component
 public class DataDirectoryInitializer implements BeanFactoryPostProcessor, EnvironmentAware {
 
-    private static final String SQLITE_PREFIX = "jdbc:sqlite:";
-
     private Environment environment;
 
     @Override
@@ -32,20 +32,22 @@ public class DataDirectoryInitializer implements BeanFactoryPostProcessor, Envir
         if (environment == null) {
             return;
         }
-        createDirectoryIfConfigured(environment.getProperty("muse.data.dir"));
-        createDirectoryIfConfigured(environment.getProperty("muse.data.sqlite-dir"));
-        createDirectoryIfConfigured(environment.getProperty("muse.data.log-dir"));
+        createDirectoryIfConfigured(environment.getProperty(StorageConstants.PROP_DATA_DIR));
+        createDirectoryIfConfigured(environment.getProperty(StorageConstants.PROP_SQLITE_DIR));
+        createDirectoryIfConfigured(environment.getProperty(StorageConstants.PROP_LOG_DIR));
 
-        String jdbcUrl = environment.getProperty("spring.datasource.url");
-        if (StringUtils.hasText(jdbcUrl) && jdbcUrl.startsWith(SQLITE_PREFIX)) {
-            String target = jdbcUrl.substring(SQLITE_PREFIX.length());
+        String jdbcUrl = environment.getProperty(StorageConstants.PROP_DATASOURCE_URL);
+        if (StringUtils.hasText(jdbcUrl) && jdbcUrl.startsWith(StorageConstants.SQLITE_JDBC_PREFIX)) {
+            String target = jdbcUrl.substring(StorageConstants.SQLITE_JDBC_PREFIX.length());
             int queryIdx = target.indexOf('?');
             if (queryIdx >= 0) {
                 target = target.substring(0, queryIdx);
             }
-            if (!target.isBlank() && !":memory:".equals(target) && !target.startsWith("file::memory:")) {
-                if (target.startsWith("file:")) {
-                    target = target.substring("file:".length());
+            if (!target.isBlank()
+                    && !StorageConstants.SQLITE_MEMORY_TARGET.equals(target)
+                    && !target.startsWith(StorageConstants.SQLITE_FILE_MEMORY_PREFIX)) {
+                if (target.startsWith(StorageConstants.SQLITE_FILE_PREFIX)) {
+                    target = target.substring(StorageConstants.SQLITE_FILE_PREFIX.length());
                 }
                 Path parent = Path.of(target).toAbsolutePath().normalize().getParent();
                 if (parent != null) {
@@ -65,7 +67,7 @@ public class DataDirectoryInitializer implements BeanFactoryPostProcessor, Envir
         try {
             Files.createDirectories(path);
         } catch (IOException ex) {
-            throw new IllegalStateException("Failed to create data directory: " + path, ex);
+            throw new IllegalStateException(ExceptionMessageConstants.DATA_DIR_CREATE_FAILED_PREFIX + path, ex);
         }
     }
 }

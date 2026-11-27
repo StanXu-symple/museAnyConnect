@@ -4,6 +4,7 @@ import com.muse.connect.aidoc.AiApiGroup;
 import com.muse.connect.aidoc.AiDocMeta;
 import com.muse.connect.aidoc.AiEndpoint;
 import com.muse.connect.aidoc.AiField;
+import com.muse.connect.constant.RouteConstants;
 import com.muse.connect.model.RelayResponse;
 import com.muse.connect.service.SshRelayService;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -13,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/relay/ssh/{profileId}")
+@RequestMapping(RouteConstants.API_RELAY_SSH_BASE)
 @AiApiGroup(AiDocMeta.GROUP_SSH_RELAY)
 public class SshRelayController {
 
@@ -43,7 +44,7 @@ public class SshRelayController {
     }
 
     @AiEndpoint(AiDocMeta.EP_SSH_EXEC)
-    @PostMapping("/exec")
+    @PostMapping(RouteConstants.SSH_EXEC)
     public RelayResponse exec(
             @PathVariable @AiField(AiDocMeta.FIELD_SSH_PROFILE_ID) String profileId,
             @RequestBody ExecRequest request
@@ -52,7 +53,7 @@ public class SshRelayController {
     }
 
     @AiEndpoint(AiDocMeta.EP_SSH_SFTP_READ)
-    @PostMapping("/sftp/read")
+    @PostMapping(RouteConstants.SSH_SFTP_READ)
     public RelayResponse sftpRead(
             @PathVariable @AiField(AiDocMeta.FIELD_SSH_PROFILE_ID) String profileId,
             @RequestBody SftpReadRequest request
@@ -61,7 +62,7 @@ public class SshRelayController {
     }
 
     @AiEndpoint(AiDocMeta.EP_SSH_SFTP_WRITE)
-    @PostMapping("/sftp/write")
+    @PostMapping(RouteConstants.SSH_SFTP_WRITE)
     public RelayResponse sftpWrite(
             @PathVariable @AiField(AiDocMeta.FIELD_SSH_PROFILE_ID) String profileId,
             @RequestBody SftpWriteRequest request

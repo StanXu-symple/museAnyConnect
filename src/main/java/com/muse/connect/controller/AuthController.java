@@ -1,6 +1,10 @@
 package com.muse.connect.controller;
 
 import com.muse.connect.config.RelayAuthFilter;
+import com.muse.connect.constant.ExceptionMessageConstants;
+import com.muse.connect.constant.RouteConstants;
+import com.muse.connect.constant.SecurityConstants;
+import com.muse.connect.constant.WebViewConstants;
 import com.muse.connect.service.AdminAuthService;
 import com.muse.connect.service.AdminAuthService.AdminSession;
 import com.muse.connect.service.AdminAuthService.AuthResult;
@@ -27,13 +31,13 @@ public class AuthController {
         this.adminAuthService = adminAuthService;
     }
 
-    @GetMapping("/health")
+    @GetMapping(RouteConstants.HEALTH)
     @ResponseBody
     public Map<String, Object> health() {
-        return Map.of("status", "UP");
+        return Map.of(WebViewConstants.KEY_STATUS, WebViewConstants.VALUE_UP);
     }
 
-    @GetMapping("/login")
+    @GetMapping(RouteConstants.LOGIN)
     public String loginPage(
             @RequestParam(required = false) String next,
             @RequestParam(required = false) String loggedOut,
@@ -41,33 +45,33 @@ public class AuthController {
             Model model
     ) {
         if (!adminAuthService.isEnabled()) {
-            return "redirect:/";
+            return RouteConstants.REDIRECT_ROOT;
         }
         if (request.getAttribute(RelayAuthFilter.REQUEST_SESSION_ATTR) instanceof AdminSession) {
-            return "redirect:" + resolveNext(next);
+            return RouteConstants.REDIRECT_PREFIX + resolveNext(next);
         }
-        model.addAttribute("next", resolveNext(next));
+        model.addAttribute(WebViewConstants.ATTR_NEXT, resolveNext(next));
         if (loggedOut != null) {
-            model.addAttribute("message", "已安全退出登录。");
+            model.addAttribute(WebViewConstants.ATTR_MESSAGE, WebViewConstants.MSG_LOGGED_OUT);
         }
         long lockedSec = adminAuthService.getLockoutRemainingSeconds(request.getRemoteAddr());
         if (lockedSec > 0) {
-            model.addAttribute("error", formatLockoutMessage(lockedSec));
+            model.addAttribute(WebViewConstants.ATTR_ERROR, formatLockoutMessage(lockedSec));
         }
-        return "login";
+        return RouteConstants.VIEW_LOGIN;
     }
 
-    @PostMapping("/login")
+    @PostMapping(RouteConstants.LOGIN)
     public String doLogin(
-            @RequestParam(defaultValue = "") String username,
-            @RequestParam(defaultValue = "") String password,
+            @RequestParam(defaultValue = RouteConstants.EMPTY) String username,
+            @RequestParam(defaultValue = RouteConstants.EMPTY) String password,
             @RequestParam(required = false) String next,
             HttpServletRequest request,
             HttpServletResponse response,
             Model model
     ) {
         if (!adminAuthService.isEnabled()) {
-            return "redirect:/";
+            return RouteConstants.REDIRECT_ROOT;
         }
 
         // 使先前可能存在的会话 Cookie 失效，防止会话固定攻击
@@ -80,40 +84,40 @@ public class AuthController {
             ResponseCookie cookie = ResponseCookie.from(RelayAuthFilter.SESSION_COOKIE_NAME, result.session().id())
                     .httpOnly(true)
                     .secure(request.isSecure())
-                    .path("/")
-                    .sameSite("Lax")
+                    .path(RouteConstants.ROOT)
+                    .sameSite(SecurityConstants.COOKIE_SAME_SITE_LAX)
                     .maxAge(adminAuthService.getSessionTtl())
                     .build();
             response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
-            return "redirect:" + safeNext;
+            return RouteConstants.REDIRECT_PREFIX + safeNext;
         }
 
-        model.addAttribute("next", safeNext);
-        model.addAttribute("username", username);
+        model.addAttribute(WebViewConstants.ATTR_NEXT, safeNext);
+        model.addAttribute(WebViewConstants.ATTR_USERNAME, username);
         if (result.status() == AuthResult.Status.LOCKED_OUT) {
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setHeader(HttpHeaders.RETRY_AFTER, String.valueOf(result.retryAfterSeconds()));
-            model.addAttribute("error", formatLockoutMessage(result.retryAfterSeconds()));
+            model.addAttribute(WebViewConstants.ATTR_ERROR, formatLockoutMessage(result.retryAfterSeconds()));
         } else {
             response.setStatus(HttpStatus.UNAUTHORIZED.value());
-            model.addAttribute("error", "用户名或密码错误，请重试。");
+            model.addAttribute(WebViewConstants.ATTR_ERROR, ExceptionMessageConstants.WEB_LOGIN_INVALID);
         }
-        return "login";
+        return RouteConstants.VIEW_LOGIN;
     }
 
-    @PostMapping("/logout")
+    @PostMapping(RouteConstants.LOGOUT)
     public String logout(HttpServletRequest request, HttpServletResponse response) {
         RelayAuthFilter.extractSessionCookie(request).ifPresent(adminAuthService::invalidateSession);
         RelayAuthFilter.clearSessionCookie(request, response);
-        return adminAuthService.isEnabled() ? "redirect:/login?loggedOut=1" : "redirect:/";
+        return adminAuthService.isEnabled() ? RouteConstants.REDIRECT_LOGIN_LOGGED_OUT : RouteConstants.REDIRECT_ROOT;
     }
 
     private String resolveNext(String next) {
-        return RelayAuthFilter.isSafeRedirectTarget(next) ? next : "/";
+        return RelayAuthFilter.isSafeRedirectTarget(next) ? next : RouteConstants.ROOT;
     }
 
     private String formatLockoutMessage(long seconds) {
         long minutes = Math.max(1, (seconds + 59) / 60);
-        return "登录失败次数过多，当前 IP 已临时锁定，请约 " + minutes + " 分钟后再试。";
+        return WebViewConstants.MSG_LOCKOUT_FMT.formatted(minutes);
     }
 }

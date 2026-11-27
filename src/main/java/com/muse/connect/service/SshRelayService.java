@@ -5,6 +5,10 @@ import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
 import com.muse.connect.config.AppProperties;
+import com.muse.connect.constant.ExceptionMessageConstants;
+import com.muse.connect.constant.HttpConstants;
+import com.muse.connect.constant.RouteConstants;
+import com.muse.connect.constant.SshRelayConstants;
 import com.muse.connect.model.AuthMode;
 import com.muse.connect.model.ConnectorConfig;
 import com.muse.connect.model.ConnectorProfile;
@@ -47,19 +51,19 @@ public class SshRelayService {
 
     public RelayResponse exec(String profileId, String command, Integer timeoutMsOverride) {
         if (!StringUtils.hasText(command)) {
-            throw new ConnectorException(HttpStatus.BAD_REQUEST, "Command is required");
+            throw new ConnectorException(HttpStatus.BAD_REQUEST, ExceptionMessageConstants.SSH_COMMAND_REQUIRED);
         }
         ConnectorProfile profile = connectorService.getEnabledProfile(profileId, ConnectorType.SSH);
         return executeCommand(profile, command.trim(), timeoutMsOverride, true);
     }
 
     public RelayResponse test(ConnectorProfile profile) {
-        return executeCommand(profile, "echo muse-ssh-ok", 8000, false);
+        return executeCommand(profile, SshRelayConstants.TEST_COMMAND, 8000, false);
     }
 
     public RelayResponse sftpRead(String profileId, String remotePath, Integer maxBytes) {
         if (!StringUtils.hasText(remotePath)) {
-            throw new ConnectorException(HttpStatus.BAD_REQUEST, "remotePath is required");
+            throw new ConnectorException(HttpStatus.BAD_REQUEST, ExceptionMessageConstants.SSH_REMOTE_PATH_REQUIRED);
         }
         ConnectorProfile profile = connectorService.getEnabledProfile(profileId, ConnectorType.SSH);
         long start = System.currentTimeMillis();
@@ -70,7 +74,7 @@ public class SshRelayService {
         try {
             int timeoutMs = resolveTimeout(profile.getConfig(), null);
             session = openSession(profile, timeoutMs);
-            sftp = (ChannelSftp) session.openChannel("sftp");
+            sftp = (ChannelSftp) session.openChannel(SshRelayConstants.CHANNEL_SFTP);
             sftp.connect(timeoutMs);
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -85,15 +89,25 @@ public class SshRelayService {
             }
             long durationMs = System.currentTimeMillis() - start;
             Map<String, Object> data = new LinkedHashMap<>();
-            data.put("remotePath", remotePath.trim());
-            data.put("bytesRead", out.size());
-            data.put("content", out.toString(StandardCharsets.UTF_8));
-            activityBuffer.record(profileId, ConnectorType.SSH, "sftp:read " + remotePath.trim(), true, 200, durationMs, "bytes=" + out.size());
+            data.put(SshRelayConstants.FIELD_REMOTE_PATH, remotePath.trim());
+            data.put(SshRelayConstants.FIELD_BYTES_READ, out.size());
+            data.put(SshRelayConstants.FIELD_CONTENT, out.toString(StandardCharsets.UTF_8));
+            activityBuffer.record(
+                    profileId, ConnectorType.SSH,
+                    SshRelayConstants.ACTION_SFTP_READ_PREFIX + remotePath.trim(),
+                    true, 200, durationMs,
+                    SshRelayConstants.SUMMARY_BYTES_PREFIX + out.size()
+            );
             return RelayResponse.ok(profileId, ConnectorType.SSH, 200, durationMs, data);
         } catch (Exception ex) {
             long durationMs = System.currentTimeMillis() - start;
-            activityBuffer.record(profileId, ConnectorType.SSH, "sftp:read " + remotePath.trim(), false, 502, durationMs, ex.getMessage());
-            return RelayResponse.fail(profileId, ConnectorType.SSH, 502, durationMs, "SFTP read failed: " + ex.getMessage(), null);
+            activityBuffer.record(
+                    profileId, ConnectorType.SSH,
+                    SshRelayConstants.ACTION_SFTP_READ_PREFIX + remotePath.trim(),
+                    false, 502, durationMs, ex.getMessage()
+            );
+            return RelayResponse.fail(profileId, ConnectorType.SSH, 502, durationMs,
+                    ExceptionMessageConstants.SSH_SFTP_READ_FAILED_PREFIX + ex.getMessage(), null);
         } finally {
             if (sftp != null && sftp.isConnected()) {
                 sftp.disconnect();
@@ -106,31 +120,41 @@ public class SshRelayService {
 
     public RelayResponse sftpWrite(String profileId, String remotePath, String content, boolean append) {
         if (!StringUtils.hasText(remotePath)) {
-            throw new ConnectorException(HttpStatus.BAD_REQUEST, "remotePath is required");
+            throw new ConnectorException(HttpStatus.BAD_REQUEST, ExceptionMessageConstants.SSH_REMOTE_PATH_REQUIRED);
         }
         ConnectorProfile profile = connectorService.getEnabledProfile(profileId, ConnectorType.SSH);
         long start = System.currentTimeMillis();
-        byte[] bytes = (content != null ? content : "").getBytes(StandardCharsets.UTF_8);
+        byte[] bytes = (content != null ? content : RouteConstants.EMPTY).getBytes(StandardCharsets.UTF_8);
 
         Session session = null;
         ChannelSftp sftp = null;
         try {
             int timeoutMs = resolveTimeout(profile.getConfig(), null);
             session = openSession(profile, timeoutMs);
-            sftp = (ChannelSftp) session.openChannel("sftp");
+            sftp = (ChannelSftp) session.openChannel(SshRelayConstants.CHANNEL_SFTP);
             sftp.connect(timeoutMs);
             sftp.put(new ByteArrayInputStream(bytes), remotePath.trim(), append ? ChannelSftp.APPEND : ChannelSftp.OVERWRITE);
             long durationMs = System.currentTimeMillis() - start;
             Map<String, Object> data = new LinkedHashMap<>();
-            data.put("remotePath", remotePath.trim());
-            data.put("bytesWritten", bytes.length);
-            data.put("append", append);
-            activityBuffer.record(profileId, ConnectorType.SSH, "sftp:write " + remotePath.trim(), true, 200, durationMs, "bytes=" + bytes.length);
+            data.put(SshRelayConstants.FIELD_REMOTE_PATH, remotePath.trim());
+            data.put(SshRelayConstants.FIELD_BYTES_WRITTEN, bytes.length);
+            data.put(SshRelayConstants.FIELD_APPEND, append);
+            activityBuffer.record(
+                    profileId, ConnectorType.SSH,
+                    SshRelayConstants.ACTION_SFTP_WRITE_PREFIX + remotePath.trim(),
+                    true, 200, durationMs,
+                    SshRelayConstants.SUMMARY_BYTES_PREFIX + bytes.length
+            );
             return RelayResponse.ok(profileId, ConnectorType.SSH, 200, durationMs, data);
         } catch (Exception ex) {
             long durationMs = System.currentTimeMillis() - start;
-            activityBuffer.record(profileId, ConnectorType.SSH, "sftp:write " + remotePath.trim(), false, 502, durationMs, ex.getMessage());
-            return RelayResponse.fail(profileId, ConnectorType.SSH, 502, durationMs, "SFTP write failed: " + ex.getMessage(), null);
+            activityBuffer.record(
+                    profileId, ConnectorType.SSH,
+                    SshRelayConstants.ACTION_SFTP_WRITE_PREFIX + remotePath.trim(),
+                    false, 502, durationMs, ex.getMessage()
+            );
+            return RelayResponse.fail(profileId, ConnectorType.SSH, 502, durationMs,
+                    ExceptionMessageConstants.SSH_SFTP_WRITE_FAILED_PREFIX + ex.getMessage(), null);
         } finally {
             if (sftp != null && sftp.isConnected()) {
                 sftp.disconnect();
@@ -158,7 +182,7 @@ public class SshRelayService {
 
         try {
             session = openSession(profile, timeoutMs);
-            channel = (ChannelExec) session.openChannel("exec");
+            channel = (ChannelExec) session.openChannel(SshRelayConstants.CHANNEL_EXEC);
             channel.setCommand(command);
             channel.setInputStream(null);
 
@@ -181,7 +205,7 @@ public class SshRelayService {
                     break;
                 }
                 if (System.currentTimeMillis() > deadline) {
-                    throw new IllegalStateException("SSH command timed out after " + timeoutMs + "ms");
+                    throw new IllegalStateException(ExceptionMessageConstants.SSH_COMMAND_TIMEOUT_FMT.formatted(timeoutMs));
                 }
                 Thread.sleep(25);
             }
@@ -189,21 +213,32 @@ public class SshRelayService {
             int exitCode = channel.getExitStatus();
             long durationMs = System.currentTimeMillis() - start;
             Map<String, Object> data = new LinkedHashMap<>();
-            data.put("exitCode", exitCode);
-            data.put("stdout", stdout.toString(StandardCharsets.UTF_8));
-            data.put("stderr", stderr.toString(StandardCharsets.UTF_8));
+            data.put(SshRelayConstants.FIELD_EXIT_CODE, exitCode);
+            data.put(SshRelayConstants.FIELD_STDOUT, stdout.toString(StandardCharsets.UTF_8));
+            data.put(SshRelayConstants.FIELD_STDERR, stderr.toString(StandardCharsets.UTF_8));
 
             boolean ok = exitCode == 0;
-            activityBuffer.record(profile.getId(), ConnectorType.SSH, "exec: " + command, ok, ok ? 200 : 500, durationMs, "exit=" + exitCode);
+            activityBuffer.record(
+                    profile.getId(), ConnectorType.SSH,
+                    SshRelayConstants.ACTION_EXEC_PREFIX + command,
+                    ok, ok ? 200 : 500, durationMs,
+                    SshRelayConstants.SUMMARY_EXIT_PREFIX + exitCode
+            );
             return ok
                     ? RelayResponse.ok(profile.getId(), ConnectorType.SSH, 200, durationMs, data)
-                    : RelayResponse.fail(profile.getId(), ConnectorType.SSH, 500, durationMs, "SSH command exited with code " + exitCode, data);
+                    : RelayResponse.fail(profile.getId(), ConnectorType.SSH, 500, durationMs,
+                    ExceptionMessageConstants.SSH_COMMAND_EXIT_PREFIX + exitCode, data);
         } catch (ConnectorException ex) {
             throw ex;
         } catch (Exception ex) {
             long durationMs = System.currentTimeMillis() - start;
-            activityBuffer.record(profile.getId(), ConnectorType.SSH, "exec: " + command, false, 502, durationMs, ex.getMessage());
-            return RelayResponse.fail(profile.getId(), ConnectorType.SSH, 502, durationMs, "SSH exec failed: " + ex.getMessage(), null);
+            activityBuffer.record(
+                    profile.getId(), ConnectorType.SSH,
+                    SshRelayConstants.ACTION_EXEC_PREFIX + command,
+                    false, 502, durationMs, ex.getMessage()
+            );
+            return RelayResponse.fail(profile.getId(), ConnectorType.SSH, 502, durationMs,
+                    ExceptionMessageConstants.SSH_EXEC_FAILED_PREFIX + ex.getMessage(), null);
         } finally {
             if (channel != null && channel.isConnected()) {
                 channel.disconnect();
@@ -219,13 +254,13 @@ public class SshRelayService {
         JSch jsch = new JSch();
         if (profile.getAuthMode() == AuthMode.PRIVATE_KEY) {
             if (!StringUtils.hasText(cfg.getPrivateKey())) {
-                throw new ConnectorException(HttpStatus.BAD_REQUEST, "SSH privateKey is missing");
+                throw new ConnectorException(HttpStatus.BAD_REQUEST, ExceptionMessageConstants.SSH_PRIVATE_KEY_MISSING);
             }
             byte[] prvKey = cfg.getPrivateKey().getBytes(StandardCharsets.UTF_8);
             byte[] passphrase = StringUtils.hasText(cfg.getPassphrase())
                     ? cfg.getPassphrase().getBytes(StandardCharsets.UTF_8)
                     : null;
-            jsch.addIdentity("muse-key-" + profile.getId(), prvKey, null, passphrase);
+            jsch.addIdentity(SshRelayConstants.IDENTITY_NAME_PREFIX + profile.getId(), prvKey, null, passphrase);
         }
 
         int port = (cfg.getPort() != null && cfg.getPort() > 0) ? cfg.getPort() : DEFAULT_SSH_PORT;
@@ -236,7 +271,10 @@ public class SshRelayService {
 
         Properties sshProps = new Properties();
         boolean strict = Boolean.TRUE.equals(cfg.getStrictHostKeyChecking());
-        sshProps.put("StrictHostKeyChecking", strict ? "yes" : "no");
+        sshProps.put(
+                SshRelayConstants.CONFIG_STRICT_HOST_KEY_CHECKING,
+                strict ? SshRelayConstants.VALUE_YES : SshRelayConstants.VALUE_NO
+        );
         session.setConfig(sshProps);
         session.setTimeout(timeoutMs);
         session.connect(timeoutMs);
@@ -247,20 +285,20 @@ public class SshRelayService {
         if (!StringUtils.hasText(cfg.getAllowedCommandPrefixes())) {
             return;
         }
-        if (command.contains(";") || command.contains("&&") || command.contains("||")
-                || command.contains("|") || command.contains("`") || command.contains("$(")
-                || command.contains("\n") || command.contains("\r")) {
-            throw new ConnectorException(HttpStatus.FORBIDDEN, "Shell chaining operators are blocked when allowedCommandPrefixes is configured");
+        for (String blocked : SshRelayConstants.BLOCKED_CHAINING_TOKENS) {
+            if (command.contains(blocked)) {
+                throw new ConnectorException(HttpStatus.FORBIDDEN, ExceptionMessageConstants.SSH_CHAINING_BLOCKED);
+            }
         }
-        List<String> prefixes = Arrays.stream(cfg.getAllowedCommandPrefixes().split(","))
+        List<String> prefixes = Arrays.stream(cfg.getAllowedCommandPrefixes().split(SshRelayConstants.ALLOWLIST_DELIMITER))
                 .map(String::trim)
                 .filter(StringUtils::hasText)
                 .toList();
         boolean matched = prefixes.stream().anyMatch(prefix ->
-                command.equals(prefix) || command.startsWith(prefix + " ")
+                command.equals(prefix) || command.startsWith(prefix + HttpConstants.SPACE)
         );
         if (!matched) {
-            throw new ConnectorException(HttpStatus.FORBIDDEN, "Command not allowed by allowedCommandPrefixes policy");
+            throw new ConnectorException(HttpStatus.FORBIDDEN, ExceptionMessageConstants.SSH_COMMAND_NOT_ALLOWED);
         }
     }
 

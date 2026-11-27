@@ -1,5 +1,7 @@
 package com.muse.connect.model;
 
+import com.muse.connect.constant.WebViewConstants;
+
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -14,7 +16,7 @@ public record RelayExecutionRecord(
         long durationMs,
         String summary
 ) {
-    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss")
+    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern(WebViewConstants.TIME_PATTERN_HMS)
             .withZone(ZoneId.systemDefault());
 
     public String formattedTime() {

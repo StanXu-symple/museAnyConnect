@@ -1,5 +1,7 @@
 package com.muse.connect.aidoc;
 
+import com.muse.connect.constant.RouteConstants;
+
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -19,11 +21,11 @@ public @interface AiField {
     AiDocMeta value() default AiDocMeta.NONE;
 
     /** 可选的参数或字段说明覆盖值。 */
-    String description() default "";
+    String description() default RouteConstants.EMPTY;
 
     /** 可选覆盖项，用于将请求体字段标记为必填。 */
     boolean required() default false;
 
     /** 可选的示例值覆盖项。 */
-    String example() default "";
+    String example() default RouteConstants.EMPTY;
 }

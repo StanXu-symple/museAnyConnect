@@ -2,6 +2,8 @@ package com.muse.connect.repository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.muse.connect.constant.ExceptionMessageConstants;
+import com.muse.connect.constant.StorageConstants;
 import com.muse.connect.model.AuthMode;
 import com.muse.connect.model.ConnectorConfig;
 import com.muse.connect.model.ConnectorProfile;
@@ -25,35 +27,29 @@ public class ConnectorProfileRepository {
         this.objectMapper = objectMapper;
         this.rowMapper = (rs, rowNum) -> {
             ConnectorProfile profile = new ConnectorProfile();
-            profile.setId(rs.getString("id"));
-            profile.setName(rs.getString("name"));
-            profile.setType(ConnectorType.valueOf(rs.getString("type")));
-            profile.setAuthMode(AuthMode.valueOf(rs.getString("auth_mode")));
-            profile.setEnabled(rs.getBoolean("enabled"));
-            profile.setUpdatedAt(rs.getLong("updated_at"));
-            String json = rs.getString("config_json");
+            profile.setId(rs.getString(StorageConstants.COL_ID));
+            profile.setName(rs.getString(StorageConstants.COL_NAME));
+            profile.setType(ConnectorType.valueOf(rs.getString(StorageConstants.COL_TYPE)));
+            profile.setAuthMode(AuthMode.valueOf(rs.getString(StorageConstants.COL_AUTH_MODE)));
+            profile.setEnabled(rs.getBoolean(StorageConstants.COL_ENABLED));
+            profile.setUpdatedAt(rs.getLong(StorageConstants.COL_UPDATED_AT));
+            String json = rs.getString(StorageConstants.COL_CONFIG_JSON);
             try {
                 profile.setConfig(objectMapper.readValue(json, ConnectorConfig.class));
             } catch (JsonProcessingException e) {
-                throw new IllegalStateException("Failed to deserialize connector config for id=" + profile.getId(), e);
+                throw new IllegalStateException(
+                        ExceptionMessageConstants.REPO_DESERIALIZE_FAILED_PREFIX + profile.getId(), e);
             }
             return profile;
         };
     }
 
     public List<ConnectorProfile> findAll() {
-        return jdbcTemplate.query(
-                "SELECT id, name, type, auth_mode, enabled, config_json, updated_at FROM connector_profile ORDER BY updated_at DESC",
-                rowMapper
-        );
+        return jdbcTemplate.query(StorageConstants.SQL_FIND_ALL, rowMapper);
     }
 
     public Optional<ConnectorProfile> findById(String id) {
-        List<ConnectorProfile> list = jdbcTemplate.query(
-                "SELECT id, name, type, auth_mode, enabled, config_json, updated_at FROM connector_profile WHERE id = ?",
-                rowMapper,
-                id
-        );
+        List<ConnectorProfile> list = jdbcTemplate.query(StorageConstants.SQL_FIND_BY_ID, rowMapper, id);
         return list.stream().findFirst();
     }
 
@@ -62,11 +58,11 @@ public class ConnectorProfileRepository {
         try {
             json = objectMapper.writeValueAsString(profile.getConfig());
         } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("Invalid connector config", e);
+            throw new IllegalArgumentException(ExceptionMessageConstants.REPO_INVALID_CONFIG, e);
         }
 
         int updated = jdbcTemplate.update(
-                "UPDATE connector_profile SET name = ?, type = ?, auth_mode = ?, enabled = ?, config_json = ?, updated_at = ? WHERE id = ?",
+                StorageConstants.SQL_UPDATE,
                 profile.getName(),
                 profile.getType().name(),
                 profile.getAuthMode().name(),
@@ -77,7 +73,7 @@ public class ConnectorProfileRepository {
         );
         if (updated == 0) {
             jdbcTemplate.update(
-                    "INSERT INTO connector_profile (id, name, type, auth_mode, enabled, config_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    StorageConstants.SQL_INSERT,
                     profile.getId(),
                     profile.getName(),
                     profile.getType().name(),
@@ -91,25 +87,22 @@ public class ConnectorProfileRepository {
     }
 
     public boolean deleteById(String id) {
-        return jdbcTemplate.update("DELETE FROM connector_profile WHERE id = ?", id) > 0;
+        return jdbcTemplate.update(StorageConstants.SQL_DELETE_BY_ID, id) > 0;
     }
 
     public long count() {
-        Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM connector_profile", Long.class);
+        Long count = jdbcTemplate.queryForObject(StorageConstants.SQL_COUNT, Long.class);
         return count != null ? count : 0L;
     }
 
     public long countEnabled() {
-        Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM connector_profile WHERE enabled = 1", Long.class);
+        Long count = jdbcTemplate.queryForObject(StorageConstants.SQL_COUNT_ENABLED, Long.class);
         return count != null ? count : 0L;
     }
 
     public long queryDbDataBytes() {
         try {
-            Long bytes = jdbcTemplate.queryForObject(
-                    "SELECT COALESCE(SUM(LENGTH(CAST(id AS BLOB)) + LENGTH(CAST(name AS BLOB)) + LENGTH(CAST(type AS BLOB)) + LENGTH(CAST(auth_mode AS BLOB)) + LENGTH(CAST(config_json AS BLOB)) + 9), 0) FROM connector_profile",
-                    Long.class
-            );
+            Long bytes = jdbcTemplate.queryForObject(StorageConstants.SQL_QUERY_DB_DATA_BYTES, Long.class);
             return bytes != null ? bytes : 0L;
         } catch (Exception ex) {
             return 0L;

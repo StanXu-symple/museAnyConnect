@@ -2,12 +2,13 @@ package com.muse.connect.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.muse.connect.constant.SecurityConstants;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ConnectorConfig {
 
-    public static final String MASK = "****";
+    public static final String MASK = SecurityConstants.SECRET_MASK;
 
     // 通用 HTTP 与网络配置字段
     private String apiBaseUrl;

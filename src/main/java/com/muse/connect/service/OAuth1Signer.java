@@ -1,5 +1,9 @@
 package com.muse.connect.service;
 
+import com.muse.connect.constant.ExceptionMessageConstants;
+import com.muse.connect.constant.HttpConstants;
+import com.muse.connect.constant.RouteConstants;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.net.URI;
@@ -60,54 +64,56 @@ public final class OAuth1Signer {
         }
 
         TreeMap<String, String> oauthParams = new TreeMap<>();
-        oauthParams.put("oauth_consumer_key", consumerKey);
-        oauthParams.put("oauth_nonce", nonce);
-        oauthParams.put("oauth_signature_method", "HMAC-SHA1");
-        oauthParams.put("oauth_timestamp", timestamp);
-        oauthParams.put("oauth_token", accessToken);
-        oauthParams.put("oauth_version", "1.0");
+        oauthParams.put(HttpConstants.OAUTH_CONSUMER_KEY, consumerKey);
+        oauthParams.put(HttpConstants.OAUTH_NONCE, nonce);
+        oauthParams.put(HttpConstants.OAUTH_SIGNATURE_METHOD, HttpConstants.OAUTH_SIGNATURE_METHOD_HMAC_SHA1);
+        oauthParams.put(HttpConstants.OAUTH_TIMESTAMP, timestamp);
+        oauthParams.put(HttpConstants.OAUTH_TOKEN, accessToken);
+        oauthParams.put(HttpConstants.OAUTH_VERSION, HttpConstants.OAUTH_VERSION_1_0);
 
         for (Map.Entry<String, String> entry : oauthParams.entrySet()) {
             allParams.put(percentEncode(entry.getKey()), percentEncode(entry.getValue()));
         }
 
         String paramString = allParams.entrySet().stream()
-                .map(e -> e.getKey() + "=" + e.getValue())
-                .collect(Collectors.joining("&"));
+                .map(e -> e.getKey() + HttpConstants.EQUALS + e.getValue())
+                .collect(Collectors.joining(RouteConstants.QUERY_AMP));
 
-        String baseUrl = requestUri.getScheme() + "://" + requestUri.getAuthority() + requestUri.getRawPath();
-        String baseString = httpMethod.toUpperCase() + "&"
-                + percentEncode(baseUrl) + "&"
+        String baseUrl = requestUri.getScheme() + HttpConstants.SCHEME_SEPARATOR
+                + requestUri.getAuthority() + requestUri.getRawPath();
+        String baseString = httpMethod.toUpperCase() + RouteConstants.QUERY_AMP
+                + percentEncode(baseUrl) + RouteConstants.QUERY_AMP
                 + percentEncode(paramString);
 
-        String signingKey = percentEncode(consumerSecret) + "&" + percentEncode(accessTokenSecret);
+        String signingKey = percentEncode(consumerSecret) + RouteConstants.QUERY_AMP + percentEncode(accessTokenSecret);
         String signature = hmacSha1Base64(baseString, signingKey);
 
-        oauthParams.put("oauth_signature", signature);
-        return "OAuth " + oauthParams.entrySet().stream()
-                .map(e -> percentEncode(e.getKey()) + "=\"" + percentEncode(e.getValue()) + "\"")
-                .collect(Collectors.joining(", "));
+        oauthParams.put(HttpConstants.OAUTH_SIGNATURE, signature);
+        return HttpConstants.AUTH_PREFIX_OAUTH + oauthParams.entrySet().stream()
+                .map(e -> percentEncode(e.getKey()) + HttpConstants.OAUTH_HEADER_QUOTE_OPEN
+                        + percentEncode(e.getValue()) + HttpConstants.OAUTH_HEADER_QUOTE_CLOSE)
+                .collect(Collectors.joining(HttpConstants.OAUTH_HEADER_PAIR_SEP));
     }
 
     static String percentEncode(String value) {
         if (value == null) {
-            return "";
+            return RouteConstants.EMPTY;
         }
         return URLEncoder.encode(value, StandardCharsets.UTF_8)
-                .replace("+", "%20")
-                .replace("*", "%2A")
-                .replace("%7E", "~");
+                .replace(HttpConstants.PLUS, HttpConstants.ENCODED_SPACE)
+                .replace(HttpConstants.ASTERISK, HttpConstants.ENCODED_ASTERISK)
+                .replace(HttpConstants.ENCODED_TILDE, HttpConstants.TILDE);
     }
 
     private static String hmacSha1Base64(String data, String key) {
         try {
-            Mac mac = Mac.getInstance("HmacSHA1");
-            SecretKeySpec spec = new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "HmacSHA1");
+            Mac mac = Mac.getInstance(HttpConstants.HMAC_SHA1_ALGORITHM);
+            SecretKeySpec spec = new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), HttpConstants.HMAC_SHA1_ALGORITHM);
             mac.init(spec);
             byte[] raw = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
             return Base64.getEncoder().encodeToString(raw);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to compute OAuth1 HMAC-SHA1 signature", e);
+            throw new IllegalStateException(ExceptionMessageConstants.OAUTH1_SIGN_FAILED, e);
         }
     }
 

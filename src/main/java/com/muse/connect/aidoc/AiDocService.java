@@ -2,6 +2,9 @@ package com.muse.connect.aidoc;
 
 import com.muse.connect.aidoc.AiEndpointDescriptor.ParamDescriptor;
 import com.muse.connect.config.RelayAuthFilter;
+import com.muse.connect.constant.AiDocConstants;
+import com.muse.connect.constant.HttpConstants;
+import com.muse.connect.constant.RouteConstants;
 import com.muse.connect.model.ConnectorConfig;
 import com.muse.connect.model.ConnectorProfile;
 import com.muse.connect.model.ConnectorType;
@@ -40,34 +43,35 @@ public class AiDocService {
         List<AiEndpointDescriptor> endpoints = filterEndpoints(scanner.getEndpoints(), profilesByType.keySet(), onlyActive);
 
         StringBuilder md = new StringBuilder(4096);
-        md.append("# MuseAnyConnect — AI API Guide (llms.txt)\n\n");
-        md.append("> Dynamically generated from controller `@AiApiGroup` / `@AiEndpoint` annotations and currently enabled connector profiles.\n\n");
+        md.append(AiDocConstants.MD_TITLE);
+        md.append(AiDocConstants.MD_SUBTITLE);
 
-        md.append("## 1. Connection & Authentication\n\n");
-        md.append("- **Base URL**: `").append(normalizedBaseUrl).append("`\n");
-        md.append("- **Auth Header**: `").append(RelayAuthFilter.HEADER_NAME).append(": <YOUR_MUSE_RELAY_API_KEY>` (required on all `/api/**` calls)\n");
-        md.append("- **Content-Type**: `application/json` for POST/PUT requests\n");
-        md.append("- **Unified Relay Response**: `{\"success\": true|false, \"profileId\": \"...\", \"connectorType\": \"X|TELEGRAM|SSH\", \"statusCode\": 200, \"durationMs\": 123, \"data\": ..., \"error\": null}`\n\n");
+        md.append(AiDocConstants.MD_SECTION_AUTH);
+        md.append(AiDocConstants.MD_BASE_URL_PREFIX).append(normalizedBaseUrl).append(AiDocConstants.MD_LINE_END_BACKTICK);
+        md.append(AiDocConstants.MD_AUTH_HEADER_PREFIX).append(RelayAuthFilter.HEADER_NAME).append(AiDocConstants.MD_AUTH_HEADER_SUFFIX);
+        md.append(AiDocConstants.MD_CONTENT_TYPE_LINE);
+        md.append(AiDocConstants.MD_UNIFIED_RESPONSE_LINE);
 
-        md.append("## 2. Active Connector Profiles (Live, Secrets Masked)\n\n");
+        md.append(AiDocConstants.MD_SECTION_PROFILES);
         if (activeProfiles.isEmpty()) {
-            md.append("_No enabled connector profiles configured yet. Create and enable profiles in the web console first._\n\n");
+            md.append(AiDocConstants.MD_NO_PROFILES);
         } else {
-            md.append("| profileId | Name | Type | Auth Mode | Capabilities / Constraints |\n");
-            md.append("| :--- | :--- | :--- | :--- | :--- |\n");
+            md.append(AiDocConstants.MD_PROFILE_TABLE_HEADER);
+            md.append(AiDocConstants.MD_PROFILE_TABLE_DIVIDER);
             for (ConnectorProfile profile : activeProfiles) {
-                md.append("| `").append(escapeMd(profile.getId())).append("` | ")
-                        .append(escapeMd(profile.getName())).append(" | ")
-                        .append(profile.getType().name()).append(" | `")
-                        .append(profile.getAuthMode().name()).append("` | ")
-                        .append(escapeMd(summarizeConstraints(profile))).append(" |\n");
+                md.append(AiDocConstants.MD_TABLE_ROW_PREFIX).append(escapeMd(profile.getId()))
+                        .append(AiDocConstants.MD_TABLE_CODE_CLOSE_SEP)
+                        .append(escapeMd(profile.getName())).append(AiDocConstants.MD_TABLE_CELL_SEP)
+                        .append(profile.getType().name()).append(AiDocConstants.MD_TABLE_CODE_OPEN_SEP)
+                        .append(profile.getAuthMode().name()).append(AiDocConstants.MD_TABLE_CODE_CLOSE_SEP)
+                        .append(escapeMd(summarizeConstraints(profile))).append(AiDocConstants.MD_TABLE_ROW_SUFFIX);
             }
             md.append('\n');
         }
 
-        md.append("## 3. Available API Endpoints\n\n");
+        md.append(AiDocConstants.MD_SECTION_ENDPOINTS);
         if (endpoints.isEmpty()) {
-            md.append("_No endpoints available for the current filter._\n");
+            md.append(AiDocConstants.MD_NO_ENDPOINTS);
             return md.toString();
         }
 
@@ -80,7 +84,7 @@ public class AiDocService {
             List<AiEndpointDescriptor> groupEndpoints = entry.getValue();
             AiEndpointDescriptor first = groupEndpoints.get(0);
 
-            md.append("### ").append(first.groupName()).append('\n');
+            md.append(AiDocConstants.MD_GROUP_HEADING_PREFIX).append(first.groupName()).append('\n');
             if (StringUtils.hasText(first.groupDescription())) {
                 md.append(first.groupDescription()).append('\n');
             }
@@ -90,18 +94,20 @@ public class AiDocService {
                     : List.of();
             if (StringUtils.hasText(first.connectorType())) {
                 if (matchedProfiles.isEmpty()) {
-                    md.append("- **Active `profileId`s**: _None currently enabled for type `")
-                            .append(first.connectorType()).append("`_\n");
+                    md.append(AiDocConstants.MD_ACTIVE_PROFILES_NONE_PREFIX)
+                            .append(first.connectorType()).append(AiDocConstants.MD_ACTIVE_PROFILES_NONE_SUFFIX);
                 } else {
                     String ids = matchedProfiles.stream()
-                            .map(p -> "`" + p.getId() + "`")
-                            .collect(Collectors.joining(", "));
-                    md.append("- **Active `profileId`s**: ").append(ids).append('\n');
+                            .map(p -> AiDocConstants.MD_BACKTICK + p.getId() + AiDocConstants.MD_BACKTICK)
+                            .collect(Collectors.joining(AiDocConstants.MD_CODE_JOINER));
+                    md.append(AiDocConstants.MD_ACTIVE_PROFILES_PREFIX).append(ids).append('\n');
                 }
             }
             md.append('\n');
 
-            String sampleProfileId = matchedProfiles.isEmpty() ? "<profileId>" : matchedProfiles.get(0).getId();
+            String sampleProfileId = matchedProfiles.isEmpty()
+                    ? AiDocConstants.PLACEHOLDER_PROFILE_ID_SAMPLE
+                    : matchedProfiles.get(0).getId();
 
             for (AiEndpointDescriptor ep : groupEndpoints) {
                 appendEndpoint(md, normalizedBaseUrl, ep, sampleProfileId);
@@ -120,26 +126,27 @@ public class AiDocService {
         List<Map<String, Object>> connectors = activeProfiles.stream()
                 .map(p -> {
                     Map<String, Object> item = new LinkedHashMap<>();
-                    item.put("profileId", p.getId());
-                    item.put("name", p.getName());
-                    item.put("type", p.getType().name());
-                    item.put("authMode", p.getAuthMode().name());
-                    item.put("constraints", summarizeConstraints(p));
+                    item.put(AiDocConstants.KEY_PROFILE_ID, p.getId());
+                    item.put(AiDocConstants.KEY_NAME, p.getName());
+                    item.put(AiDocConstants.KEY_TYPE, p.getType().name());
+                    item.put(AiDocConstants.KEY_AUTH_MODE, p.getAuthMode().name());
+                    item.put(AiDocConstants.KEY_CONSTRAINTS, summarizeConstraints(p));
                     return item;
                 })
                 .toList();
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("service", "MuseAnyConnect");
-        result.put("baseUrl", normalizedBaseUrl);
-        result.put("authHeader", RelayAuthFilter.HEADER_NAME);
-        result.put("activeConnectors", connectors);
-        result.put("endpoints", endpoints);
+        result.put(AiDocConstants.KEY_SERVICE, AiDocConstants.SERVICE_NAME);
+        result.put(AiDocConstants.KEY_BASE_URL, normalizedBaseUrl);
+        result.put(AiDocConstants.KEY_AUTH_HEADER, RelayAuthFilter.HEADER_NAME);
+        result.put(AiDocConstants.KEY_ACTIVE_CONNECTORS, connectors);
+        result.put(AiDocConstants.KEY_ENDPOINTS, endpoints);
         return result;
     }
 
     private void appendEndpoint(StringBuilder md, String baseUrl, AiEndpointDescriptor ep, String sampleProfileId) {
-        md.append("#### `").append(ep.httpMethod()).append(' ').append(ep.path()).append("` — ")
+        md.append(AiDocConstants.MD_ENDPOINT_HEADING_PREFIX).append(ep.httpMethod()).append(' ').append(ep.path())
+                .append(AiDocConstants.MD_ENDPOINT_HEADING_MID)
                 .append(ep.summary()).append('\n');
 
         if (StringUtils.hasText(ep.description())) {
@@ -147,62 +154,71 @@ public class AiDocService {
         }
 
         if (!ep.pathParams().isEmpty()) {
-            md.append("- **Path Params**:\n");
+            md.append(AiDocConstants.MD_PATH_PARAMS_HEADER);
             for (ParamDescriptor p : ep.pathParams()) {
                 appendParamBullet(md, p);
             }
         }
 
         if (!ep.queryParams().isEmpty()) {
-            md.append("- **Query Params**:\n");
+            md.append(AiDocConstants.MD_QUERY_PARAMS_HEADER);
             for (ParamDescriptor p : ep.queryParams()) {
                 appendParamBullet(md, p);
             }
         }
 
         if (StringUtils.hasText(ep.requestBodyType())) {
-            md.append("- **JSON Body** (`").append(ep.requestBodyType()).append("`, ")
-                    .append(ep.requestBodyRequired() ? "required" : "optional").append("):\n");
+            md.append(AiDocConstants.MD_JSON_BODY_PREFIX).append(ep.requestBodyType())
+                    .append(AiDocConstants.MD_PARAM_COMMA_SPACE)
+                    .append(ep.requestBodyRequired() ? AiDocConstants.LABEL_REQUIRED : AiDocConstants.LABEL_OPTIONAL)
+                    .append(AiDocConstants.MD_COLON_NEWLINE);
             for (ParamDescriptor f : ep.bodyFields()) {
                 appendParamBullet(md, f);
             }
         }
 
-        md.append("\n```bash\n");
+        md.append(AiDocConstants.MD_CODE_BASH_OPEN);
         md.append(buildCurlExample(baseUrl, ep, sampleProfileId)).append('\n');
-        md.append("```\n\n");
+        md.append(AiDocConstants.MD_CODE_CLOSE);
 
         if (StringUtils.hasText(ep.exampleResponse())) {
-            md.append("Example response:\n```json\n")
+            md.append(AiDocConstants.MD_EXAMPLE_RESPONSE_OPEN)
                     .append(ep.exampleResponse())
-                    .append("\n```\n\n");
+                    .append(AiDocConstants.MD_EXAMPLE_RESPONSE_CLOSE);
         }
     }
 
     private void appendParamBullet(StringBuilder md, ParamDescriptor p) {
-        md.append("  - `").append(p.name()).append("` (`").append(p.type()).append("`, ")
-                .append(p.required() ? "required" : "optional");
+        md.append(AiDocConstants.MD_PARAM_BULLET_PREFIX).append(p.name())
+                .append(AiDocConstants.MD_PARAM_TYPE_OPEN).append(p.type())
+                .append(AiDocConstants.MD_PARAM_COMMA_SPACE)
+                .append(p.required() ? AiDocConstants.LABEL_REQUIRED : AiDocConstants.LABEL_OPTIONAL);
         if (StringUtils.hasText(p.defaultValue())) {
-            md.append(", default=`").append(p.defaultValue()).append('`');
+            md.append(AiDocConstants.MD_PARAM_DEFAULT_PREFIX).append(p.defaultValue()).append('`');
         }
         md.append(')');
         if (StringUtils.hasText(p.description())) {
-            md.append(": ").append(p.description());
+            md.append(AiDocConstants.MD_PARAM_DESC_SEP).append(p.description());
         }
         if (StringUtils.hasText(p.example())) {
-            md.append(" (e.g. `").append(p.example()).append("`)");
+            md.append(AiDocConstants.MD_PARAM_EXAMPLE_OPEN).append(p.example()).append(AiDocConstants.MD_PARAM_EXAMPLE_CLOSE);
         }
         md.append('\n');
     }
 
     private String buildCurlExample(String baseUrl, AiEndpointDescriptor ep, String sampleProfileId) {
-        String resolvedPath = ep.path().replace("{profileId}", sampleProfileId);
+        String resolvedPath = ep.path().replace(AiDocConstants.PLACEHOLDER_PROFILE_ID_VAR, sampleProfileId);
         for (ParamDescriptor p : ep.pathParams()) {
-            if ("profileId".equals(p.name())) {
+            if (AiDocConstants.KEY_PROFILE_ID.equals(p.name())) {
                 continue;
             }
-            String sample = StringUtils.hasText(p.example()) ? p.example() : "<" + p.name() + ">";
-            resolvedPath = resolvedPath.replace("{" + p.name() + "}", sample);
+            String sample = StringUtils.hasText(p.example())
+                    ? p.example()
+                    : AiDocConstants.PLACEHOLDER_OPEN + p.name() + AiDocConstants.PLACEHOLDER_CLOSE;
+            resolvedPath = resolvedPath.replace(
+                    AiDocConstants.PATH_VAR_OPEN + p.name() + AiDocConstants.PATH_VAR_CLOSE,
+                    sample
+            );
         }
 
         StringBuilder query = new StringBuilder();
@@ -212,7 +228,9 @@ public class AiDocService {
             }
             String val = StringUtils.hasText(q.example())
                     ? q.example()
-                    : (StringUtils.hasText(q.defaultValue()) ? q.defaultValue() : "<" + q.name() + ">");
+                    : (StringUtils.hasText(q.defaultValue())
+                    ? q.defaultValue()
+                    : AiDocConstants.PLACEHOLDER_OPEN + q.name() + AiDocConstants.PLACEHOLDER_CLOSE);
             query.append(query.isEmpty() ? '?' : '&')
                     .append(q.name())
                     .append('=')
@@ -220,14 +238,17 @@ public class AiDocService {
         }
 
         StringBuilder curl = new StringBuilder();
-        curl.append("curl -X ").append(ep.httpMethod())
-                .append(" \"").append(baseUrl).append(resolvedPath).append(query).append("\"")
-                .append(" \\\n  -H \"").append(RelayAuthFilter.HEADER_NAME).append(": <YOUR_MUSE_RELAY_API_KEY>\"");
+        curl.append(AiDocConstants.CURL_CMD_PREFIX).append(ep.httpMethod())
+                .append(AiDocConstants.CURL_URL_OPEN).append(baseUrl).append(resolvedPath).append(query).append('"')
+                .append(AiDocConstants.CURL_HEADER_AUTH_PREFIX).append(RelayAuthFilter.HEADER_NAME)
+                .append(AiDocConstants.CURL_HEADER_AUTH_SUFFIX);
 
-        if (StringUtils.hasText(ep.exampleBody()) && !"GET".equals(ep.httpMethod()) && !"DELETE".equals(ep.httpMethod())) {
-            String compactBody = ep.exampleBody().replaceAll("\\R\\s*", " ").trim();
-            curl.append(" \\\n  -H \"Content-Type: application/json\"")
-                    .append(" \\\n  -d '").append(compactBody).append('\'');
+        if (StringUtils.hasText(ep.exampleBody())
+                && !HttpConstants.METHOD_GET.equals(ep.httpMethod())
+                && !HttpConstants.METHOD_DELETE.equals(ep.httpMethod())) {
+            String compactBody = ep.exampleBody().replaceAll(AiDocConstants.LINE_BREAK_INDENT_REGEX, HttpConstants.SPACE).trim();
+            curl.append(AiDocConstants.CURL_HEADER_JSON)
+                    .append(AiDocConstants.CURL_DATA_PREFIX).append(compactBody).append('\'');
         }
         return curl.toString();
     }
@@ -264,41 +285,45 @@ public class AiDocService {
     private String summarizeConstraints(ConnectorProfile profile) {
         ConnectorConfig cfg = profile.getConfig();
         if (cfg == null) {
-            return "-";
+            return AiDocConstants.CONSTRAINT_NONE;
         }
         if (profile.getType() == ConnectorType.SSH) {
             String prefixes = StringUtils.hasText(cfg.getAllowedCommandPrefixes())
-                    ? "allowedCommandPrefixes=" + cfg.getAllowedCommandPrefixes()
-                    : "all commands allowed";
-            return "port=" + (cfg.getPort() != null ? cfg.getPort() : 22) + "; " + prefixes;
+                    ? AiDocConstants.CONSTRAINT_SSH_PREFIXES + cfg.getAllowedCommandPrefixes()
+                    : AiDocConstants.CONSTRAINT_SSH_ALL_ALLOWED;
+            return AiDocConstants.CONSTRAINT_SSH_PORT_PREFIX
+                    + (cfg.getPort() != null ? cfg.getPort() : 22)
+                    + AiDocConstants.CONSTRAINT_SEMICOLON_SPACE + prefixes;
         }
         if (profile.getType() == ConnectorType.TELEGRAM) {
             return StringUtils.hasText(cfg.getDefaultChatId())
-                    ? "defaultChatId=" + cfg.getDefaultChatId()
-                    : "chatId required per request";
+                    ? AiDocConstants.CONSTRAINT_TG_DEFAULT_CHAT + cfg.getDefaultChatId()
+                    : AiDocConstants.CONSTRAINT_TG_CHAT_REQUIRED;
         }
         if (profile.getType() == ConnectorType.X) {
             return switch (profile.getAuthMode()) {
-                case OAUTH1A -> "read & write (HMAC-SHA1 signed)";
-                case BEARER_TOKEN -> "Bearer / OAuth 2.0 token";
-                case COOKIE_AUTH -> "web cookie session (auth_token + ct0, /i/api/**)";
+                case OAUTH1A -> AiDocConstants.CONSTRAINT_X_OAUTH1A;
+                case BEARER_TOKEN -> AiDocConstants.CONSTRAINT_X_BEARER;
+                case COOKIE_AUTH -> AiDocConstants.CONSTRAINT_X_COOKIE;
                 default -> profile.getAuthMode().name();
             };
         }
-        return "-";
+        return AiDocConstants.CONSTRAINT_NONE;
     }
 
     private String normalizeBaseUrl(String baseUrl) {
         if (!StringUtils.hasText(baseUrl)) {
-            return "http://localhost:8080";
+            return HttpConstants.DEFAULT_LOCAL_BASE_URL;
         }
-        return baseUrl.trim().replaceAll("/+$", "");
+        return baseUrl.trim().replaceAll(HttpConstants.TRAILING_SLASH_REGEX, RouteConstants.EMPTY);
     }
 
     private String escapeMd(String value) {
         if (value == null) {
-            return "";
+            return RouteConstants.EMPTY;
         }
-        return value.replace("|", "\\|").replace("\n", " ").replace("\r", "");
+        return value.replace(AiDocConstants.MD_PIPE, AiDocConstants.MD_ESCAPED_PIPE)
+                .replace(RouteConstants.CHAR_LF, HttpConstants.SPACE)
+                .replace(RouteConstants.CHAR_CR, RouteConstants.EMPTY);
     }
 }

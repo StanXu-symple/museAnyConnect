@@ -1,5 +1,6 @@
 package com.muse.connect.controller;
 
+import com.muse.connect.constant.WebViewConstants;
 import com.muse.connect.model.RelayResponse;
 import com.muse.connect.service.ConnectorException;
 import org.springframework.http.HttpStatus;
@@ -26,7 +27,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<RelayResponse> handleValidation(MethodArgumentNotValidException ex) {
         String msg = ex.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
-                .collect(Collectors.joining("; "));
+                .collect(Collectors.joining(WebViewConstants.VALIDATION_ERROR_DELIMITER));
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
                 RelayResponse.fail(null, null, 400, 0, msg, null)
         );

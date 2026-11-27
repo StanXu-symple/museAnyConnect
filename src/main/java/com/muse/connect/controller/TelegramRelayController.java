@@ -4,6 +4,7 @@ import com.muse.connect.aidoc.AiApiGroup;
 import com.muse.connect.aidoc.AiDocMeta;
 import com.muse.connect.aidoc.AiEndpoint;
 import com.muse.connect.aidoc.AiField;
+import com.muse.connect.constant.RouteConstants;
 import com.muse.connect.model.RelayResponse;
 import com.muse.connect.service.TelegramRelayService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/relay/telegram/{profileId}")
+@RequestMapping(RouteConstants.API_RELAY_TELEGRAM_BASE)
 @AiApiGroup(AiDocMeta.GROUP_TELEGRAM_RELAY)
 public class TelegramRelayController {
 
@@ -37,7 +38,7 @@ public class TelegramRelayController {
     }
 
     @AiEndpoint(AiDocMeta.EP_TELEGRAM_SEND_MESSAGE)
-    @PostMapping("/send")
+    @PostMapping(RouteConstants.TELEGRAM_SEND)
     public RelayResponse sendMessage(
             @PathVariable @AiField(AiDocMeta.FIELD_TELEGRAM_PROFILE_ID) String profileId,
             @RequestBody SendMessageRequest request
@@ -53,18 +54,18 @@ public class TelegramRelayController {
     }
 
     @AiEndpoint(AiDocMeta.EP_TELEGRAM_GET_UPDATES)
-    @GetMapping("/updates")
+    @GetMapping(RouteConstants.TELEGRAM_UPDATES)
     public RelayResponse getUpdates(
             @PathVariable @AiField(AiDocMeta.FIELD_TELEGRAM_PROFILE_ID) String profileId,
             @RequestParam(required = false) @AiField(AiDocMeta.FIELD_TELEGRAM_OFFSET) Long offset,
-            @RequestParam(defaultValue = "20") @AiField(AiDocMeta.FIELD_TELEGRAM_LIMIT) Integer limit,
-            @RequestParam(defaultValue = "0") @AiField(AiDocMeta.FIELD_TELEGRAM_TIMEOUT) Integer timeout
+            @RequestParam(defaultValue = RouteConstants.DEFAULT_TELEGRAM_LIMIT) @AiField(AiDocMeta.FIELD_TELEGRAM_LIMIT) Integer limit,
+            @RequestParam(defaultValue = RouteConstants.DEFAULT_TELEGRAM_TIMEOUT) @AiField(AiDocMeta.FIELD_TELEGRAM_TIMEOUT) Integer timeout
     ) {
         return telegramRelayService.getUpdates(profileId, offset, limit, timeout);
     }
 
     @AiEndpoint(AiDocMeta.EP_TELEGRAM_CALL_METHOD)
-    @PostMapping("/method/{method}")
+    @PostMapping(RouteConstants.TELEGRAM_METHOD)
     public RelayResponse callMethod(
             @PathVariable @AiField(AiDocMeta.FIELD_TELEGRAM_PROFILE_ID) String profileId,
             @PathVariable @AiField(AiDocMeta.FIELD_TELEGRAM_METHOD) String method,

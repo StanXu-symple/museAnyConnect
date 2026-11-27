@@ -4,6 +4,11 @@ import com.muse.connect.aidoc.AiApiGroup;
 import com.muse.connect.aidoc.AiDocMeta;
 import com.muse.connect.aidoc.AiEndpoint;
 import com.muse.connect.aidoc.AiField;
+import com.muse.connect.constant.ExceptionMessageConstants;
+import com.muse.connect.constant.HttpConstants;
+import com.muse.connect.constant.RouteConstants;
+import com.muse.connect.constant.SecurityConstants;
+import com.muse.connect.constant.WebViewConstants;
 import com.muse.connect.model.ConnectorProfile;
 import com.muse.connect.model.RelayResponse;
 import com.muse.connect.model.SystemStats;
@@ -28,7 +33,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping(RouteConstants.API_BASE)
 @AiApiGroup(AiDocMeta.GROUP_CONNECTOR_DISCOVERY)
 public class ConnectorApiController {
 
@@ -47,65 +52,65 @@ public class ConnectorApiController {
     }
 
     @AiEndpoint(AiDocMeta.EP_CONNECTOR_LIST)
-    @GetMapping("/connectors")
+    @GetMapping(RouteConstants.API_CONNECTORS)
     public List<ConnectorProfile> list() {
         return connectorService.listMasked();
     }
 
     @AiEndpoint(AiDocMeta.EP_CONNECTOR_GET)
-    @GetMapping("/connectors/{id}")
+    @GetMapping(RouteConstants.API_CONNECTOR_BY_ID)
     public ConnectorProfile get(@PathVariable @AiField(AiDocMeta.FIELD_CONNECTOR_ID) String id) {
         return connectorService.getMasked(id);
     }
 
-    @PostMapping("/connectors")
+    @PostMapping(RouteConstants.API_CONNECTORS)
     public ConnectorProfile upsert(@Valid @RequestBody ConnectorProfile profile) {
         return connectorService.upsert(profile);
     }
 
-    @PostMapping("/connectors/{id}/toggle")
+    @PostMapping(RouteConstants.API_CONNECTOR_TOGGLE)
     public Map<String, Object> toggle(@PathVariable String id) {
         boolean enabled = connectorService.toggleEnabled(id);
-        return Map.of("id", id, "enabled", enabled);
+        return Map.of(WebViewConstants.KEY_ID, id, WebViewConstants.KEY_ENABLED, enabled);
     }
 
     @AiEndpoint(AiDocMeta.EP_CONNECTOR_TEST)
-    @PostMapping("/connectors/{id}/test")
+    @PostMapping(RouteConstants.API_CONNECTOR_TEST)
     public RelayResponse test(@PathVariable @AiField(AiDocMeta.FIELD_CONNECTOR_ID) String id) {
         return connectorService.testConnection(id);
     }
 
-    @DeleteMapping("/connectors/{id}")
+    @DeleteMapping(RouteConstants.API_CONNECTOR_BY_ID)
     public Map<String, Object> delete(@PathVariable String id) {
         connectorService.delete(id);
-        return Map.of("deleted", true, "id", id);
+        return Map.of(WebViewConstants.KEY_DELETED, true, WebViewConstants.KEY_ID, id);
     }
 
-    @GetMapping("/connectors/export")
+    @GetMapping(RouteConstants.API_CONNECTOR_EXPORT)
     public ResponseEntity<List<ConnectorProfile>> exportJson() {
         if (!adminAuthService.isAllowRawExport()) {
-            throw new ConnectorException(HttpStatus.FORBIDDEN, "Raw credential export is disabled (MUSE_ALLOW_RAW_EXPORT=false)");
+            throw new ConnectorException(HttpStatus.FORBIDDEN, ExceptionMessageConstants.API_RAW_EXPORT_DISABLED);
         }
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=muse-connectors.json")
-                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .header(HttpHeaders.CONTENT_DISPOSITION, HttpConstants.CONTENT_DISPOSITION_EXPORT_JSON)
+                .header(HttpHeaders.CACHE_CONTROL, SecurityConstants.VALUE_NO_STORE)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(connectorService.exportAllRaw());
     }
 
-    @PostMapping("/connectors/import")
+    @PostMapping(RouteConstants.API_CONNECTOR_IMPORT)
     public Map<String, Object> importJson(@RequestBody List<ConnectorProfile> profiles) {
         connectorService.importAll(profiles);
-        return Map.of("imported", profiles != null ? profiles.size() : 0);
+        return Map.of(WebViewConstants.KEY_IMPORTED, profiles != null ? profiles.size() : 0);
     }
 
     @AiEndpoint(AiDocMeta.EP_SYSTEM_STATS)
-    @GetMapping("/stats")
+    @GetMapping(RouteConstants.API_STATS)
     public Map<String, Object> stats() {
         SystemStats stats = connectorService.getStats();
         return Map.of(
-                "stats", stats,
-                "recentActivity", activityBuffer.recent(20)
+                WebViewConstants.KEY_STATS, stats,
+                WebViewConstants.KEY_RECENT_ACTIVITY, activityBuffer.recent(20)
         );
     }
 }

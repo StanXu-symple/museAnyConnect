@@ -1,5 +1,7 @@
 package com.muse.connect.model;
 
+import com.muse.connect.constant.ExceptionMessageConstants;
+import com.muse.connect.constant.StorageConstants;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -7,17 +9,17 @@ import jakarta.validation.constraints.Size;
 
 public class ConnectorProfile {
 
-    @Pattern(regexp = "^[a-zA-Z0-9_-]{0,64}$", message = "ID only allows letters, digits, '-' and '_'")
+    @Pattern(regexp = StorageConstants.CONNECTOR_ID_PATTERN, message = ExceptionMessageConstants.VALIDATION_ID_PATTERN)
     private String id;
 
-    @NotBlank(message = "Name is required")
-    @Size(max = 64, message = "Name must be <= 64 characters")
+    @NotBlank(message = ExceptionMessageConstants.VALIDATION_NAME_REQUIRED)
+    @Size(max = 64, message = ExceptionMessageConstants.VALIDATION_NAME_MAX_LENGTH)
     private String name;
 
-    @NotNull(message = "Connector type is required")
+    @NotNull(message = ExceptionMessageConstants.VALIDATION_TYPE_REQUIRED)
     private ConnectorType type;
 
-    @NotNull(message = "Auth mode is required")
+    @NotNull(message = ExceptionMessageConstants.VALIDATION_AUTH_MODE_REQUIRED)
     private AuthMode authMode;
 
     private boolean enabled = true;

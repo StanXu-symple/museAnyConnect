@@ -1,6 +1,8 @@
 package com.muse.connect.controller;
 
 import com.muse.connect.config.RelayAuthFilter;
+import com.muse.connect.constant.RouteConstants;
+import com.muse.connect.constant.WebViewConstants;
 import com.muse.connect.service.AdminAuthService;
 import com.muse.connect.service.AdminAuthService.AdminSession;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,17 +18,17 @@ public class AuthViewAdvice {
         this.adminAuthService = adminAuthService;
     }
 
-    @ModelAttribute("authEnabled")
+    @ModelAttribute(WebViewConstants.ATTR_AUTH_ENABLED)
     public boolean authEnabled() {
         return adminAuthService.isEnabled();
     }
 
-    @ModelAttribute("allowRawExport")
+    @ModelAttribute(WebViewConstants.ATTR_ALLOW_RAW_EXPORT)
     public boolean allowRawExport() {
         return adminAuthService.isAllowRawExport();
     }
 
-    @ModelAttribute("currentUser")
+    @ModelAttribute(WebViewConstants.ATTR_CURRENT_USER)
     public String currentUser(HttpServletRequest request) {
         Object attr = request.getAttribute(RelayAuthFilter.REQUEST_SESSION_ATTR);
         if (attr instanceof AdminSession session) {
@@ -35,12 +37,12 @@ public class AuthViewAdvice {
         return null;
     }
 
-    @ModelAttribute("csrfToken")
+    @ModelAttribute(WebViewConstants.ATTR_CSRF_TOKEN)
     public String csrfToken(HttpServletRequest request) {
         Object attr = request.getAttribute(RelayAuthFilter.REQUEST_SESSION_ATTR);
         if (attr instanceof AdminSession session) {
             return session.csrfToken();
         }
-        return "";
+        return RouteConstants.EMPTY;
     }
 }

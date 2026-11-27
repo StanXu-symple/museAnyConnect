@@ -4,6 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.muse.connect.config.AppProperties;
 import com.muse.connect.config.HttpClientFactory;
+import com.muse.connect.constant.ExceptionMessageConstants;
+import com.muse.connect.constant.HttpConstants;
+import com.muse.connect.constant.RouteConstants;
+import com.muse.connect.constant.XRelayConstants;
 import com.muse.connect.model.AuthMode;
 import com.muse.connect.model.ConnectorConfig;
 import com.muse.connect.model.ConnectorProfile;
@@ -29,20 +33,15 @@ import java.util.stream.Collectors;
 @Service
 public class XRelayService {
 
-    public static final String DEFAULT_BASE_URL = "https://api.x.com";
-    public static final String DEFAULT_WEB_BASE_URL = "https://x.com";
+    public static final String DEFAULT_BASE_URL = XRelayConstants.DEFAULT_BASE_URL;
+    public static final String DEFAULT_WEB_BASE_URL = XRelayConstants.DEFAULT_WEB_BASE_URL;
 
     /** 官方 X 网页客户端内置的公共 Bearer Token（与 auth_token + ct0 配合使用）。 */
-    public static final String DEFAULT_WEB_BEARER_TOKEN =
-            "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
+    public static final String DEFAULT_WEB_BEARER_TOKEN = XRelayConstants.DEFAULT_WEB_BEARER_TOKEN;
 
     private static final String DEFAULT_USER_AGENT = XClientTransactionIdProvider.DEFAULT_WEB_USER_AGENT;
 
-    private static final Map<String, String> DEFAULT_GRAPHQL_QUERY_IDS = Map.of(
-            "CreateTweet", "l4hk8uVGvR-a8kzQ4nOhPA",
-            "SearchTimeline", "vLHjqbDv7TPFMBkIIO1nOA",
-            "UserByScreenName", "AMIBMjtxEEATh4z8V9GtRg"
-    );
+    private static final Map<String, String> DEFAULT_GRAPHQL_QUERY_IDS = XRelayConstants.DEFAULT_GRAPHQL_QUERY_IDS;
 
     private final ConnectorService connectorService;
     private final HttpClientFactory httpClientFactory;
@@ -80,23 +79,26 @@ public class XRelayService {
 
     public RelayResponse postTweet(String profileId, String text, String replyToTweetId) {
         if (!StringUtils.hasText(text)) {
-            throw new ConnectorException(HttpStatus.BAD_REQUEST, "Tweet text is required");
+            throw new ConnectorException(HttpStatus.BAD_REQUEST, ExceptionMessageConstants.X_TWEET_TEXT_REQUIRED);
         }
         ConnectorProfile profile = connectorService.getEnabledProfile(profileId, ConnectorType.X);
         if (profile.getAuthMode() == AuthMode.COOKIE_AUTH) {
             return postTweetViaCookie(profile, text, replyToTweetId);
         }
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("text", text);
+        payload.put(XRelayConstants.FIELD_TEXT, text);
         if (StringUtils.hasText(replyToTweetId)) {
-            payload.put("reply", Map.of("in_reply_to_tweet_id", replyToTweetId.trim()));
+            payload.put(
+                    XRelayConstants.FIELD_REPLY,
+                    Map.of(XRelayConstants.FIELD_IN_REPLY_TO_TWEET_ID, replyToTweetId.trim())
+            );
         }
-        return execute(profile, "POST", "/2/tweets", null, payload);
+        return execute(profile, HttpConstants.METHOD_POST, XRelayConstants.PATH_V2_TWEETS, null, payload);
     }
 
     public RelayResponse searchRecent(String profileId, String query, int maxResults) {
         if (!StringUtils.hasText(query)) {
-            throw new ConnectorException(HttpStatus.BAD_REQUEST, "Search query is required");
+            throw new ConnectorException(HttpStatus.BAD_REQUEST, ExceptionMessageConstants.X_SEARCH_QUERY_REQUIRED);
         }
         ConnectorProfile profile = connectorService.getEnabledProfile(profileId, ConnectorType.X);
         int bounded = Math.max(10, Math.min(maxResults, 100));
@@ -104,85 +106,121 @@ public class XRelayService {
             return searchViaCookie(profile, query, bounded);
         }
         Map<String, String> params = new LinkedHashMap<>();
-        params.put("query", query);
-        params.put("max_results", String.valueOf(bounded));
-        return execute(profile, "GET", "/2/tweets/search/recent", params, null);
+        params.put(XRelayConstants.PARAM_QUERY, query);
+        params.put(XRelayConstants.PARAM_MAX_RESULTS, String.valueOf(bounded));
+        return execute(profile, HttpConstants.METHOD_GET, XRelayConstants.PATH_V2_SEARCH_RECENT, params, null);
     }
 
     public RelayResponse getUserByUsername(String profileId, String username) {
         if (!StringUtils.hasText(username)) {
-            throw new ConnectorException(HttpStatus.BAD_REQUEST, "Username is required");
+            throw new ConnectorException(HttpStatus.BAD_REQUEST, ExceptionMessageConstants.X_USERNAME_REQUIRED);
         }
         ConnectorProfile profile = connectorService.getEnabledProfile(profileId, ConnectorType.X);
-        String clean = username.trim().replaceFirst("^@", "");
+        String clean = username.trim().replaceFirst(XRelayConstants.LEADING_AT_REGEX, RouteConstants.EMPTY);
         if (profile.getAuthMode() == AuthMode.COOKIE_AUTH) {
             return getUserViaCookie(profile, clean);
         }
-        return execute(profile, "GET", "/2/users/by/username/" + OAuth1Signer.percentEncode(clean), null, null);
+        return execute(
+                profile,
+                HttpConstants.METHOD_GET,
+                XRelayConstants.PATH_V2_USER_BY_USERNAME_PREFIX + OAuth1Signer.percentEncode(clean),
+                null,
+                null
+        );
     }
 
     public RelayResponse test(ConnectorProfile profile) {
         if (profile.getAuthMode() == AuthMode.COOKIE_AUTH) {
-            RelayResponse response = execute(profile, "GET", "/i/api/1.1/account/settings.json", null, null);
+            RelayResponse response = execute(profile, HttpConstants.METHOD_GET, XRelayConstants.PATH_WEB_ACCOUNT_SETTINGS, null, null);
             if (!response.success() && (response.statusCode() == 403 || response.statusCode() == 404)) {
-                return execute(profile, "GET", "/i/api/1.1/account/verify_credentials.json", Map.of("skip_status", "true"), null);
+                return execute(
+                        profile,
+                        HttpConstants.METHOD_GET,
+                        XRelayConstants.PATH_WEB_VERIFY_CREDENTIALS,
+                        Map.of(XRelayConstants.PARAM_SKIP_STATUS, XRelayConstants.VALUE_TRUE),
+                        null
+                );
             }
             return response;
         }
-        RelayResponse response = execute(profile, "GET", "/2/users/me", null, null);
+        RelayResponse response = execute(profile, HttpConstants.METHOD_GET, XRelayConstants.PATH_V2_USERS_ME, null, null);
         if (!response.success() && response.statusCode() == 403 && profile.getAuthMode() == AuthMode.BEARER_TOKEN) {
-            return execute(profile, "GET", "/2/users/by/username/X", null, null);
+            return execute(profile, HttpConstants.METHOD_GET, XRelayConstants.PATH_V2_PUBLIC_TEST_USER, null, null);
         }
         return response;
     }
 
     private RelayResponse postTweetViaCookie(ConnectorProfile profile, String text, String replyToTweetId) {
-        return executeGraphqlOperation(profile, "CreateTweet", op -> {
+        return executeGraphqlOperation(profile, XRelayConstants.OP_CREATE_TWEET, op -> {
             Map<String, Object> variables = new LinkedHashMap<>();
-            variables.put("tweet_text", text);
-            variables.put("dark_request", false);
-            variables.put("media", Map.of("media_entities", List.of(), "possibly_sensitive", false));
-            variables.put("semantic_annotation_ids", List.of());
+            variables.put(XRelayConstants.FIELD_TWEET_TEXT, text);
+            variables.put(XRelayConstants.FIELD_DARK_REQUEST, false);
+            variables.put(
+                    XRelayConstants.FIELD_MEDIA,
+                    Map.of(
+                            XRelayConstants.FIELD_MEDIA_ENTITIES, List.of(),
+                            XRelayConstants.FIELD_POSSIBLY_SENSITIVE, false
+                    )
+            );
+            variables.put(XRelayConstants.FIELD_SEMANTIC_ANNOTATION_IDS, List.of());
             if (StringUtils.hasText(replyToTweetId)) {
-                variables.put("reply", Map.of(
-                        "in_reply_to_tweet_id", replyToTweetId.trim(),
-                        "exclude_reply_user_ids", List.of()
+                variables.put(XRelayConstants.FIELD_REPLY, Map.of(
+                        XRelayConstants.FIELD_IN_REPLY_TO_TWEET_ID, replyToTweetId.trim(),
+                        XRelayConstants.FIELD_EXCLUDE_REPLY_USER_IDS, List.of()
                 ));
             }
             Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("variables", variables);
-            payload.put("features", mergeFeatureSwitches(defaultTweetFeatures(), op.featureSwitches()));
-            payload.put("queryId", op.queryId());
-            return execute(profile, "POST", "/i/api/graphql/" + op.queryId() + "/CreateTweet", null, payload);
+            payload.put(XRelayConstants.PARAM_VARIABLES, variables);
+            payload.put(XRelayConstants.PARAM_FEATURES, mergeFeatureSwitches(defaultTweetFeatures(), op.featureSwitches()));
+            payload.put(XRelayConstants.FIELD_QUERY_ID, op.queryId());
+            return execute(
+                    profile,
+                    HttpConstants.METHOD_POST,
+                    XRelayConstants.PATH_WEB_GRAPHQL_PREFIX + op.queryId() + HttpConstants.SLASH + XRelayConstants.OP_CREATE_TWEET,
+                    null,
+                    payload
+            );
         });
     }
 
     private RelayResponse searchViaCookie(ConnectorProfile profile, String query, int count) {
-        return executeGraphqlOperation(profile, "SearchTimeline", op -> {
+        return executeGraphqlOperation(profile, XRelayConstants.OP_SEARCH_TIMELINE, op -> {
             Map<String, Object> variables = new LinkedHashMap<>();
-            variables.put("rawQuery", query);
-            variables.put("count", count);
-            variables.put("querySource", "typed_query");
-            variables.put("product", "Latest");
+            variables.put(XRelayConstants.FIELD_RAW_QUERY, query);
+            variables.put(XRelayConstants.FIELD_COUNT, count);
+            variables.put(XRelayConstants.FIELD_QUERY_SOURCE, XRelayConstants.VALUE_TYPED_QUERY);
+            variables.put(XRelayConstants.FIELD_PRODUCT, XRelayConstants.VALUE_LATEST);
 
             Map<String, String> params = new LinkedHashMap<>();
-            params.put("variables", writeJson(variables));
-            params.put("features", writeJson(mergeFeatureSwitches(defaultTweetFeatures(), op.featureSwitches())));
-            params.put("fieldToggles", writeJson(Map.of("withArticleRichContentState", false)));
-            return execute(profile, "GET", "/i/api/graphql/" + op.queryId() + "/SearchTimeline", params, null);
+            params.put(XRelayConstants.PARAM_VARIABLES, writeJson(variables));
+            params.put(XRelayConstants.PARAM_FEATURES, writeJson(mergeFeatureSwitches(defaultTweetFeatures(), op.featureSwitches())));
+            params.put(XRelayConstants.PARAM_FIELD_TOGGLES, writeJson(Map.of(XRelayConstants.FIELD_ARTICLE_RICH_CONTENT, false)));
+            return execute(
+                    profile,
+                    HttpConstants.METHOD_GET,
+                    XRelayConstants.PATH_WEB_GRAPHQL_PREFIX + op.queryId() + HttpConstants.SLASH + XRelayConstants.OP_SEARCH_TIMELINE,
+                    params,
+                    null
+            );
         });
     }
 
     private RelayResponse getUserViaCookie(ConnectorProfile profile, String screenName) {
-        return executeGraphqlOperation(profile, "UserByScreenName", op -> {
+        return executeGraphqlOperation(profile, XRelayConstants.OP_USER_BY_SCREEN_NAME, op -> {
             Map<String, Object> variables = new LinkedHashMap<>();
-            variables.put("screen_name", screenName);
-            variables.put("withSafetyModeUserFields", true);
+            variables.put(XRelayConstants.FIELD_SCREEN_NAME, screenName);
+            variables.put(XRelayConstants.FIELD_SAFETY_MODE_USER_FIELDS, true);
 
             Map<String, String> params = new LinkedHashMap<>();
-            params.put("variables", writeJson(variables));
-            params.put("features", writeJson(mergeFeatureSwitches(defaultUserFeatures(), op.featureSwitches())));
-            return execute(profile, "GET", "/i/api/graphql/" + op.queryId() + "/UserByScreenName", params, null);
+            params.put(XRelayConstants.PARAM_VARIABLES, writeJson(variables));
+            params.put(XRelayConstants.PARAM_FEATURES, writeJson(mergeFeatureSwitches(defaultUserFeatures(), op.featureSwitches())));
+            return execute(
+                    profile,
+                    HttpConstants.METHOD_GET,
+                    XRelayConstants.PATH_WEB_GRAPHQL_PREFIX + op.queryId() + HttpConstants.SLASH + XRelayConstants.OP_USER_BY_SCREEN_NAME,
+                    params,
+                    null
+            );
         });
     }
 
@@ -223,7 +261,7 @@ public class XRelayService {
         ConnectorConfig cfg = profile.getConfig();
         String defaultBase = profile.getAuthMode() == AuthMode.COOKIE_AUTH ? DEFAULT_WEB_BASE_URL : DEFAULT_BASE_URL;
         return StringUtils.hasText(cfg.getApiBaseUrl())
-                ? cfg.getApiBaseUrl().replaceAll("/+$", "")
+                ? cfg.getApiBaseUrl().replaceAll(HttpConstants.TRAILING_SLASH_REGEX, RouteConstants.EMPTY)
                 : defaultBase;
     }
 
@@ -245,12 +283,12 @@ public class XRelayService {
             Object body
     ) {
         long start = System.currentTimeMillis();
-        String httpMethod = StringUtils.hasText(method) ? method.trim().toUpperCase() : "GET";
+        String httpMethod = StringUtils.hasText(method) ? method.trim().toUpperCase() : HttpConstants.METHOD_GET;
         String normalizedPath = normalizePath(path);
         ConnectorConfig cfg = profile.getConfig();
         String defaultBase = profile.getAuthMode() == AuthMode.COOKIE_AUTH ? DEFAULT_WEB_BASE_URL : DEFAULT_BASE_URL;
         String baseUrl = StringUtils.hasText(cfg.getApiBaseUrl())
-                ? cfg.getApiBaseUrl().replaceAll("/+$", "")
+                ? cfg.getApiBaseUrl().replaceAll(HttpConstants.TRAILING_SLASH_REGEX, RouteConstants.EMPTY)
                 : defaultBase;
 
         try {
@@ -259,12 +297,14 @@ public class XRelayService {
 
             int timeoutMs = httpClientFactory.resolveTimeoutMs(cfg, properties.getDefaultTimeoutMs());
             String jsonBody = null;
-            if (body != null && !"GET".equals(httpMethod) && !"DELETE".equals(httpMethod)) {
+            if (body != null
+                    && !HttpConstants.METHOD_GET.equals(httpMethod)
+                    && !HttpConstants.METHOD_DELETE.equals(httpMethod)) {
                 jsonBody = (body instanceof String s) ? s : objectMapper.writeValueAsString(body);
             }
 
             HttpClient client = httpClientFactory.getClient(cfg, properties.getDefaultTimeoutMs());
-            String requestPath = StringUtils.hasText(baseUri.getPath()) ? baseUri.getPath() : "/";
+            String requestPath = StringUtils.hasText(baseUri.getPath()) ? baseUri.getPath() : RouteConstants.ROOT;
 
             String transactionId = null;
             if (profile.getAuthMode() == AuthMode.COOKIE_AUTH) {
@@ -298,19 +338,25 @@ public class XRelayService {
 
             activityBuffer.record(
                     profile.getId(), ConnectorType.X,
-                    httpMethod + " " + normalizedPath,
+                    httpMethod + HttpConstants.SPACE + normalizedPath,
                     ok, resp.statusCode(), durationMs,
-                    ok ? "OK" : ("HTTP " + resp.statusCode())
+                    ok ? HttpConstants.SUMMARY_OK : (HttpConstants.SUMMARY_HTTP_PREFIX + resp.statusCode())
             );
             return ok
                     ? RelayResponse.ok(profile.getId(), ConnectorType.X, resp.statusCode(), durationMs, parsed)
-                    : RelayResponse.fail(profile.getId(), ConnectorType.X, resp.statusCode(), durationMs, "X API returned HTTP " + resp.statusCode(), parsed);
+                    : RelayResponse.fail(profile.getId(), ConnectorType.X, resp.statusCode(), durationMs,
+                    ExceptionMessageConstants.X_API_RETURNED_HTTP_PREFIX + resp.statusCode(), parsed);
         } catch (ConnectorException ex) {
             throw ex;
         } catch (Exception ex) {
             long durationMs = System.currentTimeMillis() - start;
-            activityBuffer.record(profile.getId(), ConnectorType.X, httpMethod + " " + normalizedPath, false, 502, durationMs, ex.getMessage());
-            return RelayResponse.fail(profile.getId(), ConnectorType.X, 502, durationMs, "X relay failed: " + ex.getMessage(), null);
+            activityBuffer.record(
+                    profile.getId(), ConnectorType.X,
+                    httpMethod + HttpConstants.SPACE + normalizedPath,
+                    false, 502, durationMs, ex.getMessage()
+            );
+            return RelayResponse.fail(profile.getId(), ConnectorType.X, 502, durationMs,
+                    ExceptionMessageConstants.X_RELAY_FAILED_PREFIX + ex.getMessage(), null);
         }
     }
 
@@ -326,15 +372,15 @@ public class XRelayService {
     ) {
         HttpRequest.Builder reqBuilder = HttpRequest.newBuilder(fullUri)
                 .timeout(Duration.ofMillis(timeoutMs))
-                .header("Accept", "application/json");
+                .header(HttpConstants.HEADER_ACCEPT, HttpConstants.MIME_APPLICATION_JSON);
 
         applyAuthHeaders(reqBuilder, profile, httpMethod, baseUri, queryParams);
         if (StringUtils.hasText(transactionId)) {
-            reqBuilder.header("x-client-transaction-id", transactionId);
+            reqBuilder.header(XRelayConstants.HEADER_TRANSACTION_ID, transactionId);
         }
 
         if (jsonBody != null) {
-            reqBuilder.header("Content-Type", "application/json");
+            reqBuilder.header(HttpConstants.HEADER_CONTENT_TYPE, HttpConstants.MIME_APPLICATION_JSON);
             reqBuilder.method(httpMethod, HttpRequest.BodyPublishers.ofString(jsonBody));
         } else {
             reqBuilder.method(httpMethod, HttpRequest.BodyPublishers.noBody());
@@ -352,9 +398,9 @@ public class XRelayService {
         ConnectorConfig cfg = profile.getConfig();
         if (profile.getAuthMode() == AuthMode.BEARER_TOKEN) {
             if (!StringUtils.hasText(cfg.getBearerToken())) {
-                throw new ConnectorException(HttpStatus.BAD_REQUEST, "Bearer token is missing");
+                throw new ConnectorException(HttpStatus.BAD_REQUEST, ExceptionMessageConstants.X_BEARER_TOKEN_MISSING);
             }
-            reqBuilder.header("Authorization", "Bearer " + cfg.getBearerToken());
+            reqBuilder.header(HttpConstants.HEADER_AUTHORIZATION, HttpConstants.AUTH_PREFIX_BEARER + cfg.getBearerToken());
             return;
         }
         if (profile.getAuthMode() == AuthMode.OAUTH1A) {
@@ -367,30 +413,36 @@ public class XRelayService {
                     cfg.getAccessToken(),
                     cfg.getAccessTokenSecret()
             );
-            reqBuilder.header("Authorization", oauthHeader);
+            reqBuilder.header(HttpConstants.HEADER_AUTHORIZATION, oauthHeader);
             return;
         }
         if (profile.getAuthMode() == AuthMode.COOKIE_AUTH) {
             if (!StringUtils.hasText(cfg.getAuthToken()) || !StringUtils.hasText(cfg.getCt0())) {
-                throw new ConnectorException(HttpStatus.BAD_REQUEST, "authToken and ct0 are required for X COOKIE_AUTH");
+                throw new ConnectorException(HttpStatus.BAD_REQUEST, ExceptionMessageConstants.CONNECTOR_X_COOKIE_REQUIRED);
             }
             String webBearer = StringUtils.hasText(cfg.getBearerToken())
                     ? cfg.getBearerToken()
                     : DEFAULT_WEB_BEARER_TOKEN;
             String ct0 = cfg.getCt0().trim();
             String authToken = cfg.getAuthToken().trim();
-            reqBuilder.header("Authorization", "Bearer " + webBearer);
-            reqBuilder.header("Cookie", "auth_token=" + authToken + "; ct0=" + ct0);
-            reqBuilder.header("x-csrf-token", ct0);
-            reqBuilder.header("x-twitter-auth-type", "OAuth2Session");
-            reqBuilder.header("x-twitter-active-user", "yes");
-            reqBuilder.header("x-twitter-client-language", "en");
-            reqBuilder.header("Origin", DEFAULT_WEB_BASE_URL);
-            reqBuilder.header("Referer", DEFAULT_WEB_BASE_URL + "/");
-            reqBuilder.header("User-Agent", DEFAULT_USER_AGENT);
+            reqBuilder.header(HttpConstants.HEADER_AUTHORIZATION, HttpConstants.AUTH_PREFIX_BEARER + webBearer);
+            reqBuilder.header(
+                    HttpConstants.HEADER_COOKIE,
+                    XRelayConstants.COOKIE_AUTH_TOKEN_PREFIX + authToken + XRelayConstants.COOKIE_CT0_SEPARATOR + ct0
+            );
+            reqBuilder.header(XRelayConstants.HEADER_X_CSRF_TOKEN, ct0);
+            reqBuilder.header(XRelayConstants.HEADER_X_AUTH_TYPE, XRelayConstants.VALUE_OAUTH2_SESSION);
+            reqBuilder.header(XRelayConstants.HEADER_X_ACTIVE_USER, XRelayConstants.VALUE_YES);
+            reqBuilder.header(XRelayConstants.HEADER_X_CLIENT_LANGUAGE, XRelayConstants.VALUE_LANG_EN);
+            reqBuilder.header(HttpConstants.HEADER_ORIGIN, DEFAULT_WEB_BASE_URL);
+            reqBuilder.header(HttpConstants.HEADER_REFERER, DEFAULT_WEB_BASE_URL + HttpConstants.SLASH);
+            reqBuilder.header(HttpConstants.HEADER_USER_AGENT, DEFAULT_USER_AGENT);
             return;
         }
-        throw new ConnectorException(HttpStatus.BAD_REQUEST, "Unsupported auth mode for X: " + profile.getAuthMode());
+        throw new ConnectorException(
+                HttpStatus.BAD_REQUEST,
+                ExceptionMessageConstants.X_UNSUPPORTED_AUTH_MODE_PREFIX + profile.getAuthMode()
+        );
     }
 
     String resolveGraphqlQueryId(ConnectorConfig cfg, String operationName) {
@@ -400,7 +452,7 @@ public class XRelayService {
 
     Optional<String> resolveCustomGraphqlQueryId(ConnectorConfig cfg, String operationName) {
         if (cfg != null && StringUtils.hasText(cfg.getGraphqlQueryIds())) {
-            String[] entries = cfg.getGraphqlQueryIds().split("[,;\\n]");
+            String[] entries = cfg.getGraphqlQueryIds().split(XRelayConstants.QUERY_ID_SPLIT_REGEX);
             for (String entry : entries) {
                 int eq = entry.indexOf('=');
                 if (eq > 0 && eq < entry.length() - 1) {
@@ -417,69 +469,23 @@ public class XRelayService {
 
     private Map<String, Object> defaultTweetFeatures() {
         Map<String, Object> f = new LinkedHashMap<>();
-        f.put("articles_preview_enabled", false);
-        f.put("c9s_tweet_anatomy_moderator_badge_enabled", true);
-        f.put("communities_web_enable_tweet_community_results_fetch", true);
-        f.put("content_disclosure_ai_generated_indicator_enabled", false);
-        f.put("content_disclosure_indicator_enabled", false);
-        f.put("creator_subscriptions_quote_tweet_preview_enabled", false);
-        f.put("creator_subscriptions_tweet_preview_api_enabled", true);
-        f.put("freedom_of_speech_not_reach_fetch_enabled", true);
-        f.put("graphql_is_translatable_rweb_tweet_is_translatable_enabled", true);
-        f.put("longform_notetweets_consumption_enabled", true);
-        f.put("longform_notetweets_inline_media_enabled", true);
-        f.put("longform_notetweets_rich_text_read_enabled", true);
-        f.put("post_ctas_fetch_enabled", false);
-        f.put("premium_content_api_read_enabled", false);
-        f.put("profile_label_improvements_pcf_label_in_post_enabled", false);
-        f.put("responsive_web_edit_tweet_api_enabled", true);
-        f.put("responsive_web_enhance_cards_enabled", false);
-        f.put("responsive_web_graphql_exclude_directive_enabled", true);
-        f.put("responsive_web_graphql_skip_user_profile_image_extensions_enabled", false);
-        f.put("responsive_web_graphql_timeline_navigation_enabled", true);
-        f.put("responsive_web_grok_analysis_button_from_backend", false);
-        f.put("responsive_web_grok_analyze_button_fetch_trends_enabled", false);
-        f.put("responsive_web_grok_analyze_post_followups_enabled", false);
-        f.put("responsive_web_grok_annotations_enabled", false);
-        f.put("responsive_web_grok_community_note_auto_translation_is_enabled", false);
-        f.put("responsive_web_grok_image_annotation_enabled", false);
-        f.put("responsive_web_grok_imagine_annotation_enabled", false);
-        f.put("responsive_web_grok_share_attachment_enabled", false);
-        f.put("responsive_web_grok_show_grok_translated_post", true);
-        f.put("responsive_web_jetfuel_frame", false);
-        f.put("responsive_web_made_on_x_label_enabled", false);
-        f.put("responsive_web_media_download_video_enabled", false);
-        f.put("responsive_web_nested_quote_preview_enabled", false);
-        f.put("responsive_web_profile_redirect_enabled", true);
-        f.put("responsive_web_twitter_article_tweet_consumption_enabled", true);
-        f.put("rweb_cashtags_composer_attachment_enabled", false);
-        f.put("rweb_cashtags_enabled", false);
-        f.put("rweb_conversational_replies_downvote_enabled", false);
-        f.put("rweb_sports_post_context_enabled", false);
-        f.put("rweb_tipjar_consumption_enabled", true);
-        f.put("rweb_video_screen_enabled", true);
-        f.put("rweb_video_timestamps_enabled", true);
-        f.put("standardized_nudges_misinfo", true);
-        f.put("tweet_awards_web_tipping_enabled", false);
-        f.put("tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled", true);
-        f.put("tweet_with_visibility_results_prefer_gql_media_interstitial_enabled", false);
-        f.put("tweetypie_unmention_optimization_enabled", true);
-        f.put("verified_phone_label_enabled", false);
-        f.put("view_counts_everywhere_api_enabled", true);
-        f.put("x_elections_post_context_enabled", false);
+        for (String key : XRelayConstants.DEFAULT_TWEET_TRUE_FEATURES) {
+            f.put(key, true);
+        }
+        for (String key : XRelayConstants.DEFAULT_TWEET_FALSE_FEATURES) {
+            f.put(key, false);
+        }
         return f;
     }
 
     private Map<String, Object> defaultUserFeatures() {
         Map<String, Object> f = new LinkedHashMap<>(defaultTweetFeatures());
-        f.put("highlights_tweets_tab_ui_enabled", true);
-        f.put("hidden_profile_likes_enabled", true);
-        f.put("hidden_profile_subscriptions_enabled", true);
-        f.put("subscriptions_verification_info_verified_since_enabled", true);
-        f.put("subscriptions_verification_info_is_identity_verified_enabled", false);
-        f.put("responsive_web_twitter_article_notes_tab_enabled", false);
-        f.put("subscriptions_feature_can_gift_premium", false);
-        f.put("profile_label_improvements_pcf_label_in_post_enabled", false);
+        for (String key : XRelayConstants.DEFAULT_USER_EXTRA_TRUE_FEATURES) {
+            f.put(key, true);
+        }
+        for (String key : XRelayConstants.DEFAULT_USER_EXTRA_FALSE_FEATURES) {
+            f.put(key, false);
+        }
         return f;
     }
 
@@ -487,16 +493,19 @@ public class XRelayService {
         try {
             return objectMapper.writeValueAsString(value);
         } catch (Exception ex) {
-            throw new ConnectorException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to serialize X request payload: " + ex.getMessage());
+            throw new ConnectorException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    ExceptionMessageConstants.X_SERIALIZE_PAYLOAD_FAILED_PREFIX + ex.getMessage()
+            );
         }
     }
 
     private String normalizePath(String path) {
         if (!StringUtils.hasText(path)) {
-            throw new ConnectorException(HttpStatus.BAD_REQUEST, "API path is required (e.g. /2/users/me)");
+            throw new ConnectorException(HttpStatus.BAD_REQUEST, ExceptionMessageConstants.X_API_PATH_REQUIRED);
         }
         String trimmed = path.trim();
-        return trimmed.startsWith("/") ? trimmed : "/" + trimmed;
+        return trimmed.startsWith(HttpConstants.SLASH) ? trimmed : HttpConstants.SLASH + trimmed;
     }
 
     private URI appendQueryParams(URI baseUri, Map<String, String> queryParams) {
@@ -505,12 +514,12 @@ public class XRelayService {
         }
         String query = queryParams.entrySet().stream()
                 .filter(e -> e.getKey() != null && e.getValue() != null)
-                .map(e -> OAuth1Signer.percentEncode(e.getKey()) + "=" + OAuth1Signer.percentEncode(e.getValue()))
-                .collect(Collectors.joining("&"));
+                .map(e -> OAuth1Signer.percentEncode(e.getKey()) + HttpConstants.EQUALS + OAuth1Signer.percentEncode(e.getValue()))
+                .collect(Collectors.joining(RouteConstants.QUERY_AMP));
         if (query.isEmpty()) {
             return baseUri;
         }
-        String sep = baseUri.getRawQuery() == null ? "?" : "&";
+        String sep = baseUri.getRawQuery() == null ? RouteConstants.QUERY_PREFIX : RouteConstants.QUERY_AMP;
         return URI.create(baseUri + sep + query);
     }
 

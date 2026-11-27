@@ -2,6 +2,9 @@ package com.muse.connect.aidoc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.muse.connect.aidoc.AiEndpointDescriptor.ParamDescriptor;
+import com.muse.connect.constant.AiDocConstants;
+import com.muse.connect.constant.HttpConstants;
+import com.muse.connect.constant.RouteConstants;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.stereotype.Component;
@@ -42,7 +45,7 @@ public class AiDocScanner {
     private volatile List<AiEndpointDescriptor> cachedEndpoints;
 
     public AiDocScanner(
-            @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping,
+            @Qualifier(AiDocConstants.HANDLER_MAPPING_BEAN) RequestMappingHandlerMapping handlerMapping,
             ObjectMapper objectMapper
     ) {
         this.handlerMapping = handlerMapping;
@@ -78,16 +81,16 @@ public class AiDocScanner {
             AiApiGroup groupAnn = AnnotatedElementUtils.findMergedAnnotation(handler.getBeanType(), AiApiGroup.class);
             AiDocMeta groupMeta = groupAnn != null ? groupAnn.value() : AiDocMeta.NONE;
             String groupName = firstNonBlank(
-                    groupAnn != null ? groupAnn.name() : "",
+                    groupAnn != null ? groupAnn.name() : RouteConstants.EMPTY,
                     groupMeta.title(),
                     handler.getBeanType().getSimpleName()
             );
             String groupDesc = firstNonBlank(
-                    groupAnn != null ? groupAnn.description() : "",
+                    groupAnn != null ? groupAnn.description() : RouteConstants.EMPTY,
                     groupMeta.description()
             );
             String connectorType = firstNonBlank(
-                    groupAnn != null ? groupAnn.connectorType() : "",
+                    groupAnn != null ? groupAnn.connectorType() : RouteConstants.EMPTY,
                     groupMeta.connectorTypeName()
             ).toUpperCase();
             int groupOrder = (groupAnn != null && groupAnn.order() >= 0) ? groupAnn.order() : groupMeta.order();
@@ -109,13 +112,13 @@ public class AiDocScanner {
             String bodyTypeName = null;
             boolean bodyRequired = false;
             List<ParamDescriptor> bodyFields = List.of();
-            String synthesizedBody = "";
+            String synthesizedBody = RouteConstants.EMPTY;
 
             for (Parameter param : method.getParameters()) {
                 AiField aiField = param.getAnnotation(AiField.class);
                 AiDocMeta fieldMeta = aiField != null ? aiField.value() : AiDocMeta.NONE;
-                String fieldDesc = firstNonBlank(aiField != null ? aiField.description() : "", fieldMeta.description());
-                String fieldExample = firstNonBlank(aiField != null ? aiField.example() : "", fieldMeta.example());
+                String fieldDesc = firstNonBlank(aiField != null ? aiField.description() : RouteConstants.EMPTY, fieldMeta.description());
+                String fieldExample = firstNonBlank(aiField != null ? aiField.example() : RouteConstants.EMPTY, fieldMeta.example());
 
                 PathVariable pathVar = param.getAnnotation(PathVariable.class);
                 if (pathVar != null) {
@@ -124,7 +127,7 @@ public class AiDocScanner {
                             name,
                             formatType(param.getParameterizedType()),
                             pathVar.required(),
-                            "",
+                            RouteConstants.EMPTY,
                             fieldDesc,
                             fieldExample
                     ));
@@ -134,7 +137,9 @@ public class AiDocScanner {
                 RequestParam reqParam = param.getAnnotation(RequestParam.class);
                 if (reqParam != null) {
                     String name = firstNonBlank(reqParam.name(), reqParam.value(), param.getName());
-                    String defaultVal = ValueConstants.DEFAULT_NONE.equals(reqParam.defaultValue()) ? "" : reqParam.defaultValue();
+                    String defaultVal = ValueConstants.DEFAULT_NONE.equals(reqParam.defaultValue())
+                            ? RouteConstants.EMPTY
+                            : reqParam.defaultValue();
                     boolean required = reqParam.required() && !StringUtils.hasText(defaultVal);
                     queryParams.add(new ParamDescriptor(
                             name,
@@ -159,7 +164,7 @@ public class AiDocScanner {
             String exampleBody = firstNonBlank(endpointAnn.exampleBody(), endpointMeta.example(), synthesizedBody);
 
             List<String> resolvedMethods = httpMethods.isEmpty()
-                    ? List.of("GET")
+                    ? List.of(HttpConstants.METHOD_GET)
                     : httpMethods.stream().map(Enum::name).sorted().toList();
 
             for (String path : paths.stream().sorted().toList()) {
@@ -223,9 +228,9 @@ public class AiDocScanner {
                         component.getName(),
                         formatType(component.getGenericType()),
                         required,
-                        "",
-                        firstNonBlank(aiField != null ? aiField.description() : "", fieldMeta.description()),
-                        firstNonBlank(aiField != null ? aiField.example() : "", fieldMeta.example())
+                        RouteConstants.EMPTY,
+                        firstNonBlank(aiField != null ? aiField.description() : RouteConstants.EMPTY, fieldMeta.description()),
+                        firstNonBlank(aiField != null ? aiField.example() : RouteConstants.EMPTY, fieldMeta.example())
                 ));
             }
             return fields;
@@ -244,9 +249,9 @@ public class AiDocScanner {
                     field.getName(),
                     formatType(field.getGenericType()),
                     required,
-                    "",
-                    firstNonBlank(aiField != null ? aiField.description() : "", fieldMeta.description()),
-                    firstNonBlank(aiField != null ? aiField.example() : "", fieldMeta.example())
+                    RouteConstants.EMPTY,
+                    firstNonBlank(aiField != null ? aiField.description() : RouteConstants.EMPTY, fieldMeta.description()),
+                    firstNonBlank(aiField != null ? aiField.example() : RouteConstants.EMPTY, fieldMeta.example())
             ));
         }
         return fields;
@@ -257,13 +262,13 @@ public class AiDocScanner {
             return paramExample;
         }
         if (Map.class.isAssignableFrom(bodyClass)) {
-            return "{}";
+            return AiDocConstants.EMPTY_JSON_OBJECT;
         }
         if (Collection.class.isAssignableFrom(bodyClass)) {
-            return "[]";
+            return AiDocConstants.EMPTY_JSON_ARRAY;
         }
         if (bodyFields.isEmpty()) {
-            return "";
+            return RouteConstants.EMPTY;
         }
 
         Map<String, Object> sample = new LinkedHashMap<>();
@@ -276,7 +281,7 @@ public class AiDocScanner {
         try {
             return objectMapper.writeValueAsString(sample);
         } catch (Exception ex) {
-            return "{}";
+            return AiDocConstants.EMPTY_JSON_OBJECT;
         }
     }
 
@@ -284,17 +289,18 @@ public class AiDocScanner {
         String type = field.type();
         String example = field.example();
         if (StringUtils.hasText(example)) {
-            if ("boolean".equals(type) || "Boolean".equals(type)) {
+            if (AiDocConstants.TYPE_BOOLEAN_PRIMITIVE.equals(type) || AiDocConstants.TYPE_BOOLEAN_WRAPPER.equals(type)) {
                 return Boolean.parseBoolean(example);
             }
-            if ("int".equals(type) || "Integer".equals(type) || "long".equals(type) || "Long".equals(type)) {
+            if (AiDocConstants.TYPE_INT_PRIMITIVE.equals(type) || AiDocConstants.TYPE_INTEGER_WRAPPER.equals(type)
+                    || AiDocConstants.TYPE_LONG_PRIMITIVE.equals(type) || AiDocConstants.TYPE_LONG_WRAPPER.equals(type)) {
                 try {
                     return Long.parseLong(example);
                 } catch (NumberFormatException ignored) {
                     return example;
                 }
             }
-            if (example.startsWith("{") || example.startsWith("[")) {
+            if (example.startsWith(AiDocConstants.JSON_OBJ_START) || example.startsWith(AiDocConstants.JSON_ARR_START)) {
                 try {
                     return objectMapper.readValue(example, Object.class);
                 } catch (Exception ignored) {
@@ -303,22 +309,23 @@ public class AiDocScanner {
             }
             return example;
         }
-        if ("boolean".equals(type) || "Boolean".equals(type)) {
+        if (AiDocConstants.TYPE_BOOLEAN_PRIMITIVE.equals(type) || AiDocConstants.TYPE_BOOLEAN_WRAPPER.equals(type)) {
             return false;
         }
-        if ("int".equals(type) || "Integer".equals(type) || "long".equals(type) || "Long".equals(type)) {
+        if (AiDocConstants.TYPE_INT_PRIMITIVE.equals(type) || AiDocConstants.TYPE_INTEGER_WRAPPER.equals(type)
+                || AiDocConstants.TYPE_LONG_PRIMITIVE.equals(type) || AiDocConstants.TYPE_LONG_WRAPPER.equals(type)) {
             return 0;
         }
-        if (type.startsWith("Map")) {
+        if (type.startsWith(AiDocConstants.TYPE_MAP_PREFIX)) {
             return Map.of();
         }
-        if (type.startsWith("List") || type.startsWith("Set")) {
+        if (type.startsWith(AiDocConstants.TYPE_LIST_PREFIX) || type.startsWith(AiDocConstants.TYPE_SET_PREFIX)) {
             return List.of();
         }
-        if ("Object".equals(type)) {
+        if (AiDocConstants.TYPE_OBJECT.equals(type)) {
             return null;
         }
-        return "<" + field.name() + ">";
+        return AiDocConstants.PLACEHOLDER_OPEN + field.name() + AiDocConstants.PLACEHOLDER_CLOSE;
     }
 
     private String formatType(Type type) {
@@ -331,7 +338,7 @@ public class AiDocScanner {
             Type[] args = pt.getActualTypeArguments();
             for (int i = 0; i < args.length; i++) {
                 if (i > 0) {
-                    sb.append(", ");
+                    sb.append(AiDocConstants.MD_CODE_JOINER);
                 }
                 sb.append(formatType(args[i]));
             }
@@ -346,6 +353,6 @@ public class AiDocScanner {
                 return c.trim();
             }
         }
-        return "";
+        return RouteConstants.EMPTY;
     }
 }

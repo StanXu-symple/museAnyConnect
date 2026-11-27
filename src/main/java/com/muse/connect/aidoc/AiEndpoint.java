@@ -1,5 +1,7 @@
 package com.muse.connect.aidoc;
 
+import com.muse.connect.constant.RouteConstants;
+
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -19,16 +21,16 @@ public @interface AiEndpoint {
     AiDocMeta value() default AiDocMeta.NONE;
 
     /** 可选的单行端点摘要覆盖值。 */
-    String summary() default "";
+    String summary() default RouteConstants.EMPTY;
 
     /** 可选的详细使用规则或注意事项覆盖值。 */
-    String description() default "";
+    String description() default RouteConstants.EMPTY;
 
     /** 可选的自定义 JSON 请求体示例（省略时将根据 @RequestBody 字段自动生成）。 */
-    String exampleBody() default "";
+    String exampleBody() default RouteConstants.EMPTY;
 
     /** 可选的精简 JSON 响应示例。 */
-    String exampleResponse() default "";
+    String exampleResponse() default RouteConstants.EMPTY;
 
     /** 可选的组内排序权重覆盖值（-1 表示沿用枚举默认顺序）。 */
     int order() default -1;

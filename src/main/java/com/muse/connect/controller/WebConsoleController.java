@@ -4,6 +4,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.muse.connect.aidoc.AiDocService;
 import com.muse.connect.config.AppProperties;
+import com.muse.connect.constant.ExceptionMessageConstants;
+import com.muse.connect.constant.HttpConstants;
+import com.muse.connect.constant.RouteConstants;
+import com.muse.connect.constant.SecurityConstants;
+import com.muse.connect.constant.WebViewConstants;
 import com.muse.connect.model.AuthMode;
 import com.muse.connect.model.ConnectorConfig;
 import com.muse.connect.model.ConnectorProfile;
@@ -56,18 +61,18 @@ public class WebConsoleController {
         this.aiDocService = aiDocService;
     }
 
-    @GetMapping("/")
+    @GetMapping(RouteConstants.ROOT)
     public String dashboard(Model model) {
-        model.addAttribute("stats", connectorService.getStats());
-        model.addAttribute("connectors", connectorService.listMasked());
-        model.addAttribute("activities", activityBuffer.recent(25));
-        model.addAttribute("apiKeyEnabled", StringUtils.hasText(appProperties.getApiKey()));
-        return "dashboard";
+        model.addAttribute(WebViewConstants.ATTR_STATS, connectorService.getStats());
+        model.addAttribute(WebViewConstants.ATTR_CONNECTORS, connectorService.listMasked());
+        model.addAttribute(WebViewConstants.ATTR_ACTIVITIES, activityBuffer.recent(25));
+        model.addAttribute(WebViewConstants.ATTR_API_KEY_ENABLED, StringUtils.hasText(appProperties.getApiKey()));
+        return RouteConstants.VIEW_DASHBOARD;
     }
 
-    @GetMapping("/connectors/new")
+    @GetMapping(RouteConstants.WEB_CONNECTORS_NEW)
     public String newConnector(
-            @RequestParam(defaultValue = "X") ConnectorType type,
+            @RequestParam(defaultValue = RouteConstants.DEFAULT_CONNECTOR_TYPE_X) ConnectorType type,
             Model model
     ) {
         ConnectorProfile profile = new ConnectorProfile();
@@ -81,127 +86,140 @@ public class WebConsoleController {
         profile.setConfig(cfg);
 
         populateFormModel(model, profile, false);
-        return "connector-form";
+        return RouteConstants.VIEW_CONNECTOR_FORM;
     }
 
-    @GetMapping("/connectors/{id}/edit")
+    @GetMapping(RouteConstants.WEB_CONNECTORS_EDIT)
     public String editConnector(@PathVariable String id, Model model, RedirectAttributes ra) {
         try {
             ConnectorProfile profile = connectorService.getMasked(id);
             populateFormModel(model, profile, true);
-            return "connector-form";
+            return RouteConstants.VIEW_CONNECTOR_FORM;
         } catch (ConnectorException ex) {
-            ra.addFlashAttribute("error", ex.getMessage());
-            return "redirect:/";
+            ra.addFlashAttribute(WebViewConstants.ATTR_ERROR, ex.getMessage());
+            return RouteConstants.REDIRECT_ROOT;
         }
     }
 
-    @PostMapping("/connectors/save")
+    @PostMapping(RouteConstants.WEB_CONNECTORS_SAVE)
     public String saveConnector(
-            @ModelAttribute("profile") ConnectorProfile profile,
-            @RequestParam(defaultValue = "false") boolean editing,
+            @ModelAttribute(WebViewConstants.ATTR_PROFILE) ConnectorProfile profile,
+            @RequestParam(defaultValue = RouteConstants.DEFAULT_FALSE) boolean editing,
             Model model,
             RedirectAttributes ra
     ) {
         try {
             if (!StringUtils.hasText(profile.getName())) {
-                throw new ConnectorException(org.springframework.http.HttpStatus.BAD_REQUEST, "连接名称不能为空");
+                throw new ConnectorException(HttpStatus.BAD_REQUEST, ExceptionMessageConstants.WEB_CONNECTOR_NAME_REQUIRED);
             }
             ConnectorProfile saved = connectorService.upsert(profile);
-            ra.addFlashAttribute("message", "已保存连接器 [" + saved.getName() + "] (" + saved.getId() + ")");
-            return "redirect:/";
+            ra.addFlashAttribute(
+                    WebViewConstants.ATTR_MESSAGE,
+                    WebViewConstants.MSG_CONNECTOR_SAVED_FMT.formatted(saved.getName(), saved.getId())
+            );
+            return RouteConstants.REDIRECT_ROOT;
         } catch (ConnectorException ex) {
-            model.addAttribute("error", ex.getMessage());
+            model.addAttribute(WebViewConstants.ATTR_ERROR, ex.getMessage());
             populateFormModel(model, profile, editing);
-            return "connector-form";
+            return RouteConstants.VIEW_CONNECTOR_FORM;
         }
     }
 
-    @PostMapping("/connectors/{id}/toggle")
+    @PostMapping(RouteConstants.WEB_CONNECTORS_TOGGLE)
     public String toggle(@PathVariable String id, RedirectAttributes ra) {
         try {
             boolean enabled = connectorService.toggleEnabled(id);
-            ra.addFlashAttribute("message", "连接器 " + id + (enabled ? " 已启用" : " 已停用"));
+            String msg = enabled
+                    ? WebViewConstants.MSG_CONNECTOR_ENABLED_FMT.formatted(id)
+                    : WebViewConstants.MSG_CONNECTOR_DISABLED_FMT.formatted(id);
+            ra.addFlashAttribute(WebViewConstants.ATTR_MESSAGE, msg);
         } catch (ConnectorException ex) {
-            ra.addFlashAttribute("error", ex.getMessage());
+            ra.addFlashAttribute(WebViewConstants.ATTR_ERROR, ex.getMessage());
         }
-        return "redirect:/";
+        return RouteConstants.REDIRECT_ROOT;
     }
 
-    @PostMapping("/connectors/{id}/delete")
+    @PostMapping(RouteConstants.WEB_CONNECTORS_DELETE)
     public String delete(@PathVariable String id, RedirectAttributes ra) {
         try {
             connectorService.delete(id);
-            ra.addFlashAttribute("message", "已删除连接器 " + id);
+            ra.addFlashAttribute(WebViewConstants.ATTR_MESSAGE, WebViewConstants.MSG_CONNECTOR_DELETED_FMT.formatted(id));
         } catch (ConnectorException ex) {
-            ra.addFlashAttribute("error", ex.getMessage());
+            ra.addFlashAttribute(WebViewConstants.ATTR_ERROR, ex.getMessage());
         }
-        return "redirect:/";
+        return RouteConstants.REDIRECT_ROOT;
     }
 
-    @PostMapping("/connectors/{id}/test")
+    @PostMapping(RouteConstants.WEB_CONNECTORS_TEST)
     public String test(@PathVariable String id, RedirectAttributes ra) {
         try {
             RelayResponse res = connectorService.testConnection(id);
             if (res.success()) {
-                ra.addFlashAttribute("message", "连通性测试成功 [" + id + "]，耗时 " + res.durationMs() + "ms (HTTP " + res.statusCode() + ")");
+                ra.addFlashAttribute(
+                        WebViewConstants.ATTR_MESSAGE,
+                        WebViewConstants.MSG_TEST_SUCCESS_FMT.formatted(id, res.durationMs(), res.statusCode())
+                );
             } else {
-                ra.addFlashAttribute("error", "连通性测试失败 [" + id + "]: " + res.error() + " (HTTP " + res.statusCode() + ")");
+                ra.addFlashAttribute(
+                        WebViewConstants.ATTR_ERROR,
+                        WebViewConstants.MSG_TEST_FAILED_FMT.formatted(id, res.error(), res.statusCode())
+                );
             }
         } catch (ConnectorException ex) {
-            ra.addFlashAttribute("error", ex.getMessage());
+            ra.addFlashAttribute(WebViewConstants.ATTR_ERROR, ex.getMessage());
         }
-        return "redirect:/";
+        return RouteConstants.REDIRECT_ROOT;
     }
 
-    @PostMapping("/connectors/export")
+    @PostMapping(RouteConstants.WEB_CONNECTORS_EXPORT)
     public ResponseEntity<List<ConnectorProfile>> exportFromConsole() {
         if (!adminAuthService.isAllowRawExport()) {
-            throw new ConnectorException(HttpStatus.FORBIDDEN, "当前配置已禁止导出明文凭据 (MUSE_ALLOW_RAW_EXPORT=false)");
+            throw new ConnectorException(HttpStatus.FORBIDDEN, ExceptionMessageConstants.WEB_RAW_EXPORT_DISABLED);
         }
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=muse-connectors.json")
-                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .header(HttpHeaders.CONTENT_DISPOSITION, HttpConstants.CONTENT_DISPOSITION_EXPORT_JSON)
+                .header(HttpHeaders.CACHE_CONTROL, SecurityConstants.VALUE_NO_STORE)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(connectorService.exportAllRaw());
     }
 
-    @PostMapping("/connectors/import")
-    public String importJson(@RequestParam("jsonPayload") String jsonPayload, RedirectAttributes ra) {
+    @PostMapping(RouteConstants.WEB_CONNECTORS_IMPORT)
+    public String importJson(@RequestParam(RouteConstants.PARAM_JSON_PAYLOAD) String jsonPayload, RedirectAttributes ra) {
         try {
             List<ConnectorProfile> list = objectMapper.readValue(jsonPayload, new TypeReference<>() {});
             connectorService.importAll(list);
-            ra.addFlashAttribute("message", "成功导入 " + list.size() + " 条连接配置");
+            ra.addFlashAttribute(WebViewConstants.ATTR_MESSAGE, WebViewConstants.MSG_IMPORT_SUCCESS_FMT.formatted(list.size()));
         } catch (Exception ex) {
-            ra.addFlashAttribute("error", "JSON 导入失败: " + ex.getMessage());
+            ra.addFlashAttribute(WebViewConstants.ATTR_ERROR, ExceptionMessageConstants.WEB_JSON_IMPORT_FAILED_PREFIX + ex.getMessage());
         }
-        return "redirect:/";
+        return RouteConstants.REDIRECT_ROOT;
     }
 
-    @GetMapping("/playground")
+    @GetMapping(RouteConstants.WEB_PLAYGROUND)
     public String playground(@RequestParam(required = false) String profileId, Model model) {
         List<ConnectorProfile> connectors = connectorService.listMasked();
-        model.addAttribute("connectors", connectors);
-        model.addAttribute("selectedProfileId", profileId);
-        model.addAttribute("apiKeyEnabled", StringUtils.hasText(appProperties.getApiKey()));
-        return "playground";
+        model.addAttribute(WebViewConstants.ATTR_CONNECTORS, connectors);
+        model.addAttribute(WebViewConstants.ATTR_SELECTED_PROFILE_ID, profileId);
+        model.addAttribute(WebViewConstants.ATTR_API_KEY_ENABLED, StringUtils.hasText(appProperties.getApiKey()));
+        return RouteConstants.VIEW_PLAYGROUND;
     }
 
-    @GetMapping("/ai-docs")
-    public String aiDocs(@RequestParam(defaultValue = "false") boolean onlyActive, Model model) {
+    @GetMapping(RouteConstants.WEB_AI_DOCS)
+    public String aiDocs(@RequestParam(defaultValue = RouteConstants.DEFAULT_FALSE) boolean onlyActive, Model model) {
         String baseUrl = ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();
-        String llmsUrl = baseUrl + "/api/ai/llms.txt" + (onlyActive ? "?onlyActive=true" : "");
-        model.addAttribute("onlyActive", onlyActive);
-        model.addAttribute("llmsUrl", llmsUrl);
-        model.addAttribute("aiMarkdown", aiDocService.renderMarkdown(baseUrl, onlyActive));
-        return "ai-docs";
+        String llmsUrl = baseUrl + RouteConstants.API_AI_LLMS_TXT_FULL
+                + (onlyActive ? RouteConstants.QUERY_ONLY_ACTIVE_TRUE : RouteConstants.EMPTY);
+        model.addAttribute(WebViewConstants.ATTR_ONLY_ACTIVE, onlyActive);
+        model.addAttribute(WebViewConstants.ATTR_LLMS_URL, llmsUrl);
+        model.addAttribute(WebViewConstants.ATTR_AI_MARKDOWN, aiDocService.renderMarkdown(baseUrl, onlyActive));
+        return RouteConstants.VIEW_AI_DOCS;
     }
 
     private void populateFormModel(Model model, ConnectorProfile profile, boolean editing) {
-        model.addAttribute("profile", profile);
-        model.addAttribute("editing", editing);
-        model.addAttribute("connectorTypes", ConnectorType.values());
-        model.addAttribute("authModes", AuthMode.values());
+        model.addAttribute(WebViewConstants.ATTR_PROFILE, profile);
+        model.addAttribute(WebViewConstants.ATTR_EDITING, editing);
+        model.addAttribute(WebViewConstants.ATTR_CONNECTOR_TYPES, ConnectorType.values());
+        model.addAttribute(WebViewConstants.ATTR_AUTH_MODES, AuthMode.values());
     }
 
     private AuthMode defaultAuthMode(ConnectorType type) {

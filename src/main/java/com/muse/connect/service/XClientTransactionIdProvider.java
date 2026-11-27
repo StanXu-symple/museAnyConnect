@@ -1,6 +1,12 @@
 package com.muse.connect.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.muse.connect.constant.ExceptionMessageConstants;
+import com.muse.connect.constant.HttpConstants;
+import com.muse.connect.constant.LogMessageConstants;
+import com.muse.connect.constant.RouteConstants;
+import com.muse.connect.constant.StorageConstants;
+import com.muse.connect.constant.XRelayConstants;
 import com.muse.connect.model.ConnectorConfig;
 import com.muse.connect.model.ConnectorProfile;
 import org.slf4j.Logger;
@@ -43,62 +49,47 @@ public class XClientTransactionIdProvider {
 
     private static final Logger log = LoggerFactory.getLogger(XClientTransactionIdProvider.class);
 
-    static final String DEFAULT_WEB_USER_AGENT =
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+    static final String DEFAULT_WEB_USER_AGENT = XRelayConstants.DEFAULT_WEB_USER_AGENT;
 
     private static final long EPOCH_OFFSET_MS = 1682924400_000L;
-    private static final String DEFAULT_KEYWORD = "obfiowerehiring";
+    private static final String DEFAULT_KEYWORD = XRelayConstants.TRANSACTION_KEYWORD;
     private static final byte DEFAULT_RANDOM_BYTE = 3;
     private static final long CACHE_TTL_MS = Duration.ofMinutes(30).toMillis();
     private static final int MAX_CACHE_ENTRIES = 64;
     private static final int MAX_DYNAMIC_CHUNKS_TO_SCAN = 48;
 
     private static final Pattern META_TAG_PATTERN =
-            Pattern.compile("<meta\\b[^>]*>", Pattern.CASE_INSENSITIVE);
+            Pattern.compile(XRelayConstants.REGEX_META_TAG, Pattern.CASE_INSENSITIVE);
     private static final Pattern NAME_ATTR_PATTERN =
-            Pattern.compile("\\bname\\s*=\\s*[\"']([^\"']+)[\"']", Pattern.CASE_INSENSITIVE);
+            Pattern.compile(XRelayConstants.REGEX_NAME_ATTR, Pattern.CASE_INSENSITIVE);
     private static final Pattern CONTENT_ATTR_PATTERN =
-            Pattern.compile("\\bcontent\\s*=\\s*[\"']([^\"']+)[\"']", Pattern.CASE_INSENSITIVE);
+            Pattern.compile(XRelayConstants.REGEX_CONTENT_ATTR, Pattern.CASE_INSENSITIVE);
 
     private static final Pattern SVG_ANIM_PATTERN =
-            Pattern.compile("<svg\\b[^>]*\\bid\\s*=\\s*[\"']loading-x-anim[^\"']*[\"'][^>]*>(.*?)</svg>",
-                    Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+            Pattern.compile(XRelayConstants.REGEX_SVG_ANIM, Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern FIRST_G_PATTERN =
-            Pattern.compile("<g\\b[^>]*>(.*?)</g>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+            Pattern.compile(XRelayConstants.REGEX_FIRST_G, Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern PATH_D_PATTERN =
-            Pattern.compile("<path\\b[^>]*\\bd\\s*=\\s*[\"']([^\"']+)[\"'][^>]*>", Pattern.CASE_INSENSITIVE);
+            Pattern.compile(XRelayConstants.REGEX_PATH_D, Pattern.CASE_INSENSITIVE);
 
-    private static final Pattern ASSET_XWEB_URL_PATTERN =
-            Pattern.compile("https?://[\\w.:-]+/x-web/[\\w./-]+\\.js");
-    private static final Pattern RESPONSIVE_WEB_URL_PATTERN =
-            Pattern.compile("https?://[\\w.:-]+/responsive-web/client-web/[\\w./-]+\\.js");
-    private static final Pattern LEGACY_MAIN_PATTERN =
-            Pattern.compile("/client-web/main\\.([^.\"']+)\\.js");
-    private static final Pattern HASH_MAP_PATTERN =
-            Pattern.compile("(\\d+):\"([0-9a-f]{7}|[0-9a-f]{16})\"");
-    private static final Pattern NAME_MAP_PATTERN =
-            Pattern.compile("(\\d+):\"([^\"]+)\"");
-    private static final Pattern HEX_HASH_PATTERN =
-            Pattern.compile("[0-9a-f]{7}|[0-9a-f]{16}");
-    private static final Pattern LOGGED_OUT_ENTRY_PATTERN =
-            Pattern.compile("(?:^|/)entry-client-logged-out(?:[-.][^/?#]+)?\\.js(?:[?#].*)?$");
-    private static final Pattern INDICES_FILE_PATTERN =
-            Pattern.compile("(?:\\.{0,2}/)?[\\w./-]*?\\b(?:ondemand\\.s|sign\\.o)[\\w.-]*\\.js");
+    private static final Pattern ASSET_XWEB_URL_PATTERN = Pattern.compile(XRelayConstants.REGEX_ASSET_XWEB_URL);
+    private static final Pattern RESPONSIVE_WEB_URL_PATTERN = Pattern.compile(XRelayConstants.REGEX_RESPONSIVE_WEB_URL);
+    private static final Pattern LEGACY_MAIN_PATTERN = Pattern.compile(XRelayConstants.REGEX_LEGACY_MAIN);
+    private static final Pattern HASH_MAP_PATTERN = Pattern.compile(XRelayConstants.REGEX_HASH_MAP);
+    private static final Pattern NAME_MAP_PATTERN = Pattern.compile(XRelayConstants.REGEX_NAME_MAP);
+    private static final Pattern HEX_HASH_PATTERN = Pattern.compile(XRelayConstants.REGEX_HEX_HASH);
+    private static final Pattern LOGGED_OUT_ENTRY_PATTERN = Pattern.compile(XRelayConstants.REGEX_LOGGED_OUT_ENTRY);
+    private static final Pattern INDICES_FILE_PATTERN = Pattern.compile(XRelayConstants.REGEX_INDICES_FILE);
     private static final Pattern LOCAL_SCRIPT_SRC_PATTERN =
-            Pattern.compile("<script\\b[^>]*\\bsrc\\s*=\\s*[\"']([^\"']+\\.js(?:\\?[^\"']*)?)[\"']",
-                    Pattern.CASE_INSENSITIVE);
-    private static final Pattern INDICES_REGEX =
-            Pattern.compile("(\\(\\w\\[(\\d{1,2})],\\s*16\\))+");
-    private static final Pattern GRAPHQL_OP_PATTERN = Pattern.compile(
-            "queryId:\"([A-Za-z0-9_-]+)\",operationName:\"(CreateTweet|SearchTimeline|UserByScreenName)\"(?:[^}]*?metadata:\\{[^}]*?featureSwitches:\\[([^\\]]*)\\])?"
-    );
-    private static final Pattern QUOTED_STRING_PATTERN = Pattern.compile("\"([^\"]+)\"");
+            Pattern.compile(XRelayConstants.REGEX_LOCAL_SCRIPT_SRC, Pattern.CASE_INSENSITIVE);
+    private static final Pattern INDICES_REGEX = Pattern.compile(XRelayConstants.REGEX_INDICES);
+    private static final Pattern GRAPHQL_OP_PATTERN = Pattern.compile(XRelayConstants.REGEX_GRAPHQL_OP);
+    private static final Pattern QUOTED_STRING_PATTERN = Pattern.compile(XRelayConstants.REGEX_QUOTED_STRING);
     private static final Pattern INPUT_TAG_PATTERN =
-            Pattern.compile("<input\\b[^>]*>", Pattern.CASE_INSENSITIVE);
+            Pattern.compile(XRelayConstants.REGEX_INPUT_TAG, Pattern.CASE_INSENSITIVE);
     private static final Pattern VALUE_ATTR_PATTERN =
-            Pattern.compile("\\bvalue\\s*=\\s*[\"']([^\"']*)[\"']", Pattern.CASE_INSENSITIVE);
-    private static final Set<String> TRACKED_GRAPHQL_OPS =
-            Set.of("CreateTweet", "SearchTimeline", "UserByScreenName");
+            Pattern.compile(XRelayConstants.REGEX_VALUE_ATTR, Pattern.CASE_INSENSITIVE);
+    private static final Set<String> TRACKED_GRAPHQL_OPS = XRelayConstants.TRACKED_GRAPHQL_OPS;
 
     private final ObjectMapper objectMapper;
     private final ConcurrentHashMap<String, CachedWebContext> cache = new ConcurrentHashMap<>();
@@ -165,12 +156,13 @@ public class XClientTransactionIdProvider {
         }
 
         try {
-            String cookieHeader = "auth_token=" + cfg.getAuthToken().trim() + "; ct0=" + cfg.getCt0().trim();
+            String cookieHeader = XRelayConstants.COOKIE_AUTH_TOKEN_PREFIX + cfg.getAuthToken().trim()
+                    + XRelayConstants.COOKIE_CT0_SEPARATOR + cfg.getCt0().trim();
             CachedWebContext fresh = fetchWebContext(client, bootstrapBase, cookieHeader, timeoutMs);
             putCached(cacheKey, fresh);
             return Optional.of(fresh);
         } catch (Exception ex) {
-            log.warn("Unable to initialize X web context from {}: {}", bootstrapBase, ex.getMessage());
+            log.warn(LogMessageConstants.X_WEB_CONTEXT_INIT_WARN, bootstrapBase, ex.getMessage());
             return Optional.empty();
         }
     }
@@ -190,11 +182,12 @@ public class XClientTransactionIdProvider {
         if (!StringUtils.hasText(baseUrl)) {
             return XRelayService.DEFAULT_WEB_BASE_URL;
         }
-        String trimmed = baseUrl.trim().replaceAll("/+$", "");
+        String trimmed = baseUrl.trim().replaceAll(HttpConstants.TRAILING_SLASH_REGEX, RouteConstants.EMPTY);
         try {
             URI uri = URI.create(trimmed);
             String host = uri.getHost();
-            if ("api.x.com".equalsIgnoreCase(host) || "api.twitter.com".equalsIgnoreCase(host)) {
+            if (XRelayConstants.HOST_API_X.equalsIgnoreCase(host)
+                    || XRelayConstants.HOST_API_TWITTER.equalsIgnoreCase(host)) {
                 return XRelayService.DEFAULT_WEB_BASE_URL;
             }
         } catch (Exception ignored) {
@@ -209,7 +202,7 @@ public class XClientTransactionIdProvider {
             String cookieHeader,
             int timeoutMs
     ) throws Exception {
-        URI pageUri = URI.create(bootstrapBase + "/tesla");
+        URI pageUri = URI.create(bootstrapBase + XRelayConstants.PATH_BOOTSTRAP_PAGE);
         String html = fetchPageText(client, pageUri, cookieHeader, timeoutMs);
         byte[] vkBytes = parseVerificationKey(html);
         List<double[]> animRows = parseAnimationRows(html, vkBytes);
@@ -253,9 +246,9 @@ public class XClientTransactionIdProvider {
         List<String> mainFirst = new ArrayList<>();
         List<String> xWebNext = new ArrayList<>();
         for (String url : allScripts) {
-            if (url.contains("/main.")) {
+            if (url.contains(XRelayConstants.PATH_SEGMENT_MAIN)) {
                 mainFirst.add(url);
-            } else if (url.contains("/x-web/") && !INDICES_FILE_PATTERN.matcher(url).find()) {
+            } else if (url.contains(XRelayConstants.PATH_SEGMENT_X_WEB) && !INDICES_FILE_PATTERN.matcher(url).find()) {
                 xWebNext.add(url);
             }
         }
@@ -293,23 +286,23 @@ public class XClientTransactionIdProvider {
     ) throws Exception {
         HttpResponse<String> resp = sendGet(client, uri, cookieHeader, timeoutMs);
         if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
-            throw new IllegalStateException("Bootstrap page returned HTTP " + resp.statusCode());
+            throw new IllegalStateException(ExceptionMessageConstants.X_BOOTSTRAP_HTTP_PREFIX + resp.statusCode());
         }
         String body = resp.body();
-        if (body == null || !body.contains(">document.location =")) {
-            return body == null ? "" : body;
+        if (body == null || !body.contains(XRelayConstants.DOC_LOCATION_MARKER)) {
+            return body == null ? RouteConstants.EMPTY : body;
         }
 
-        String redirectUrl = extractBetween(body, "document.location = \"", "\"");
+        String redirectUrl = extractBetween(body, XRelayConstants.DOC_LOCATION_START, XRelayConstants.DOUBLE_QUOTE);
         if (!StringUtils.hasText(redirectUrl)) {
             return body;
         }
         HttpResponse<String> nextResp = sendGet(client, URI.create(redirectUrl), cookieHeader, timeoutMs);
         if (nextResp.statusCode() < 200 || nextResp.statusCode() >= 300) {
-            throw new IllegalStateException("Redirect page returned HTTP " + nextResp.statusCode());
+            throw new IllegalStateException(ExceptionMessageConstants.X_REDIRECT_HTTP_PREFIX + nextResp.statusCode());
         }
-        String nextBody = nextResp.body() == null ? "" : nextResp.body();
-        if (!nextBody.contains("action=\"https://x.com/x/migrate\" method=\"post\"")) {
+        String nextBody = nextResp.body() == null ? RouteConstants.EMPTY : nextResp.body();
+        if (!nextBody.contains(XRelayConstants.MIGRATE_FORM_MARKER)) {
             return nextBody;
         }
 
@@ -323,18 +316,18 @@ public class XClientTransactionIdProvider {
                 formData.put(name, value);
             }
         }
-        HttpRequest migrateReq = HttpRequest.newBuilder(URI.create("https://x.com/x/migrate"))
+        HttpRequest migrateReq = HttpRequest.newBuilder(URI.create(XRelayConstants.URL_MIGRATE))
                 .timeout(Duration.ofMillis(timeoutMs))
-                .header("User-Agent", DEFAULT_WEB_USER_AGENT)
-                .header("Cookie", cookieHeader)
-                .header("Content-Type", "application/json")
+                .header(HttpConstants.HEADER_USER_AGENT, DEFAULT_WEB_USER_AGENT)
+                .header(HttpConstants.HEADER_COOKIE, cookieHeader)
+                .header(HttpConstants.HEADER_CONTENT_TYPE, HttpConstants.MIME_APPLICATION_JSON)
                 .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(formData)))
                 .build();
         HttpResponse<String> migrateResp = client.send(migrateReq, HttpResponse.BodyHandlers.ofString());
         if (migrateResp.statusCode() < 200 || migrateResp.statusCode() >= 300) {
-            throw new IllegalStateException("Migrate endpoint returned HTTP " + migrateResp.statusCode());
+            throw new IllegalStateException(ExceptionMessageConstants.X_MIGRATE_HTTP_PREFIX + migrateResp.statusCode());
         }
-        return migrateResp.body() == null ? "" : migrateResp.body();
+        return migrateResp.body() == null ? RouteConstants.EMPTY : migrateResp.body();
     }
 
     private HttpResponse<String> sendGet(
@@ -345,11 +338,11 @@ public class XClientTransactionIdProvider {
     ) throws Exception {
         HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
                 .timeout(Duration.ofMillis(timeoutMs))
-                .header("User-Agent", DEFAULT_WEB_USER_AGENT)
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                .header("Accept-Language", "en-US,en;q=0.9");
+                .header(HttpConstants.HEADER_USER_AGENT, DEFAULT_WEB_USER_AGENT)
+                .header(HttpConstants.HEADER_ACCEPT, HttpConstants.ACCEPT_HTML)
+                .header(HttpConstants.HEADER_ACCEPT_LANGUAGE, HttpConstants.ACCEPT_LANGUAGE_EN);
         if (StringUtils.hasText(cookieHeader)) {
-            builder.header("Cookie", cookieHeader);
+            builder.header(HttpConstants.HEADER_COOKIE, cookieHeader);
         }
         return client.send(builder.GET().build(), HttpResponse.BodyHandlers.ofString());
     }
@@ -359,19 +352,19 @@ public class XClientTransactionIdProvider {
         while (metaMatcher.find()) {
             String tag = metaMatcher.group();
             String name = extractAttr(NAME_ATTR_PATTERN, tag);
-            if ("twitter-site-verification".equalsIgnoreCase(name)) {
+            if (XRelayConstants.META_VERIFICATION_NAME.equalsIgnoreCase(name)) {
                 String content = extractAttr(CONTENT_ATTR_PATTERN, tag);
                 if (StringUtils.hasText(content)) {
                     return Base64.getDecoder().decode(content.trim());
                 }
             }
         }
-        throw new IllegalStateException("X verification key meta tag not found");
+        throw new IllegalStateException(ExceptionMessageConstants.X_VK_META_NOT_FOUND);
     }
 
     static List<double[]> parseAnimationRows(String html, byte[] vkBytes) {
         if (vkBytes.length <= 5) {
-            throw new IllegalStateException("X verification key is too short");
+            throw new IllegalStateException(ExceptionMessageConstants.X_VK_TOO_SHORT);
         }
         List<String> secondPathDs = new ArrayList<>();
         Matcher svgMatcher = SVG_ANIM_PATTERN.matcher(html);
@@ -391,23 +384,23 @@ public class XClientTransactionIdProvider {
             }
         }
         if (secondPathDs.isEmpty()) {
-            throw new IllegalStateException("X SVG animation data not found");
+            throw new IllegalStateException(ExceptionMessageConstants.X_SVG_ANIM_NOT_FOUND);
         }
 
         int idx = (vkBytes[5] & 0xFF) % secondPathDs.size();
         String d = secondPathDs.get(idx);
         if (d.length() <= 9) {
-            throw new IllegalStateException("X SVG animation path is malformed");
+            throw new IllegalStateException(ExceptionMessageConstants.X_SVG_ANIM_MALFORMED);
         }
-        String[] segments = d.substring(9).split("C");
+        String[] segments = d.substring(9).split(XRelayConstants.SVG_CURVE_SPLIT);
         List<double[]> rows = new ArrayList<>(segments.length);
         for (String seg : segments) {
-            String cleaned = seg.replaceAll("[^\\d]+", " ").trim();
+            String cleaned = seg.replaceAll(XRelayConstants.NON_DIGIT_REGEX, HttpConstants.SPACE).trim();
             if (cleaned.isEmpty()) {
                 rows.add(new double[0]);
                 continue;
             }
-            String[] nums = cleaned.split("\\s+");
+            String[] nums = cleaned.split(XRelayConstants.WHITESPACE_REGEX);
             double[] row = new double[nums.length];
             for (int i = 0; i < nums.length; i++) {
                 row[i] = Double.parseDouble(nums[i]);
@@ -424,7 +417,9 @@ public class XClientTransactionIdProvider {
         Matcher localScriptMatcher = LOCAL_SCRIPT_SRC_PATTERN.matcher(html);
         while (localScriptMatcher.find()) {
             String src = localScriptMatcher.group(1);
-            if (INDICES_FILE_PATTERN.matcher(src).find() || src.contains("/x-web/") || src.contains("/main.")) {
+            if (INDICES_FILE_PATTERN.matcher(src).find()
+                    || src.contains(XRelayConstants.PATH_SEGMENT_X_WEB)
+                    || src.contains(XRelayConstants.PATH_SEGMENT_MAIN)) {
                 urls.add(pageUri.resolve(src).toString());
             }
         }
@@ -437,11 +432,11 @@ public class XClientTransactionIdProvider {
         while (responsiveMatcher.find()) {
             urls.add(responsiveMatcher.group());
         }
-        boolean hasMainUrl = urls.stream().anyMatch(u -> u.contains("/main."));
+        boolean hasMainUrl = urls.stream().anyMatch(u -> u.contains(XRelayConstants.PATH_SEGMENT_MAIN));
         if (!hasMainUrl) {
             Matcher mainMatcher = LEGACY_MAIN_PATTERN.matcher(html);
             if (mainMatcher.find()) {
-                urls.add(clientWebScriptUrl("main", mainMatcher.group(1)));
+                urls.add(clientWebScriptUrl(XRelayConstants.SCRIPT_NAME_MAIN, mainMatcher.group(1)));
             }
         }
 
@@ -461,11 +456,11 @@ public class XClientTransactionIdProvider {
         }
         for (Map.Entry<String, String> entry : hashMap.entrySet()) {
             String name = nameMap.getOrDefault(entry.getKey(), entry.getKey());
-            urls.add(clientWebScriptUrl(name, entry.getValue() + "a"));
+            urls.add(clientWebScriptUrl(name, entry.getValue() + XRelayConstants.SCRIPT_HASH_SUFFIX_A));
         }
 
         if (urls.isEmpty()) {
-            throw new IllegalStateException("X web script URLs not found");
+            throw new IllegalStateException(ExceptionMessageConstants.X_SCRIPT_URLS_NOT_FOUND);
         }
         return new ArrayList<>(urls);
     }
@@ -476,11 +471,11 @@ public class XClientTransactionIdProvider {
             int timeoutMs
     ) throws Exception {
         List<String> scripts = allScripts;
-        List<String> xWebScripts = scripts.stream().filter(u -> u.contains("/x-web/")).toList();
+        List<String> xWebScripts = scripts.stream().filter(u -> u.contains(XRelayConstants.PATH_SEGMENT_X_WEB)).toList();
         if (!xWebScripts.isEmpty()) {
             boolean loggedOut = xWebScripts.stream().anyMatch(u -> LOGGED_OUT_ENTRY_PATTERN.matcher(u).find());
             if (loggedOut) {
-                throw new IllegalStateException("Logged-out X web app (auth_token or ct0 may be invalid/expired)");
+                throw new IllegalStateException(ExceptionMessageConstants.X_WEB_LOGGED_OUT);
             }
             scripts = xWebScripts;
         }
@@ -496,9 +491,9 @@ public class XClientTransactionIdProvider {
 
         HttpResponse<String> scriptResp = sendGet(client, URI.create(signingScriptUrl), null, timeoutMs);
         if (scriptResp.statusCode() < 200 || scriptResp.statusCode() >= 300) {
-            throw new IllegalStateException("Signing script returned HTTP " + scriptResp.statusCode());
+            throw new IllegalStateException(ExceptionMessageConstants.X_SIGNING_SCRIPT_HTTP_PREFIX + scriptResp.statusCode());
         }
-        return extractIndicesFromScript(scriptResp.body() == null ? "" : scriptResp.body());
+        return extractIndicesFromScript(scriptResp.body() == null ? RouteConstants.EMPTY : scriptResp.body());
     }
 
     private String findDynamicIndicesUrl(List<String> scripts, HttpClient client, int timeoutMs) {
@@ -517,7 +512,7 @@ public class XClientTransactionIdProvider {
                 // 跳过无法访问的脚本分片并继续扫描
             }
         }
-        throw new IllegalStateException("X signing script reference not found in web bundles");
+        throw new IllegalStateException(ExceptionMessageConstants.X_SIGNING_SCRIPT_REF_NOT_FOUND);
     }
 
     static List<Integer> extractIndicesFromScript(String scriptText) {
@@ -527,7 +522,7 @@ public class XClientTransactionIdProvider {
             indices.add(Integer.parseInt(matcher.group(2)));
         }
         if (indices.size() < 2) {
-            throw new IllegalStateException("X signing indices not found in script");
+            throw new IllegalStateException(ExceptionMessageConstants.X_SIGNING_INDICES_NOT_FOUND);
         }
         return indices;
     }
@@ -575,16 +570,18 @@ public class XClientTransactionIdProvider {
                 rounded = -rounded;
             }
             String hexValue = floatToHex(rounded);
-            if (hexValue.startsWith(".")) {
-                sb.append(("0" + hexValue).toLowerCase(Locale.ROOT));
+            if (hexValue.startsWith(XRelayConstants.DOT)) {
+                sb.append((XRelayConstants.ZERO + hexValue).toLowerCase(Locale.ROOT));
             } else if (!hexValue.isEmpty()) {
                 sb.append(hexValue);
             } else {
-                sb.append("0");
+                sb.append(XRelayConstants.ZERO);
             }
         }
-        sb.append("00");
-        return sb.toString().replace(".", "").replace("-", "");
+        sb.append(XRelayConstants.DOUBLE_ZERO);
+        return sb.toString()
+                .replace(XRelayConstants.DOT, RouteConstants.EMPTY)
+                .replace(StorageConstants.HYPHEN, RouteConstants.EMPTY);
     }
 
     private static double[] interpolate(double[] fromList, double[] toList, double f) {
@@ -651,7 +648,7 @@ public class XClientTransactionIdProvider {
     }
 
     private static String clientWebScriptUrl(String name, String hash) {
-        return "https://abs.twimg.com/responsive-web/client-web/" + name + "." + hash + ".js";
+        return XRelayConstants.URL_CLIENT_WEB_PREFIX + name + XRelayConstants.DOT + hash + XRelayConstants.URL_JS_SUFFIX;
     }
 
     private static String extractAttr(Pattern pattern, String tag) {
@@ -671,11 +668,11 @@ public class XClientTransactionIdProvider {
 
     private static String buildCacheKey(String bootstrapBase, String authToken) {
         try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            MessageDigest md = MessageDigest.getInstance(HttpConstants.SHA256_ALGORITHM);
             byte[] hash = md.digest(authToken.getBytes(StandardCharsets.UTF_8));
-            return bootstrapBase + "|" + Base64.getEncoder().encodeToString(hash);
+            return bootstrapBase + XRelayConstants.CACHE_KEY_SEP + Base64.getEncoder().encodeToString(hash);
         } catch (Exception ex) {
-            return bootstrapBase + "|" + authToken.hashCode();
+            return bootstrapBase + XRelayConstants.CACHE_KEY_SEP + authToken.hashCode();
         }
     }
 
@@ -761,16 +758,16 @@ public class XClientTransactionIdProvider {
                 tsBytes[i] = (byte) ((ts >> (i * 8)) & 0xFF);
             }
 
-            String normalizedPath = StringUtils.hasText(path) ? path : "/";
+            String normalizedPath = StringUtils.hasText(path) ? path : RouteConstants.ROOT;
             String payloadInput = method.toUpperCase(Locale.ROOT)
-                    + "!" + normalizedPath
-                    + "!" + ts + DEFAULT_KEYWORD + animKey;
+                    + XRelayConstants.PAYLOAD_SEP + normalizedPath
+                    + XRelayConstants.PAYLOAD_SEP + ts + DEFAULT_KEYWORD + animKey;
             byte[] sha;
             try {
-                sha = MessageDigest.getInstance("SHA-256")
+                sha = MessageDigest.getInstance(HttpConstants.SHA256_ALGORITHM)
                         .digest(payloadInput.getBytes(StandardCharsets.UTF_8));
             } catch (Exception ex) {
-                throw new IllegalStateException("SHA-256 unavailable", ex);
+                throw new IllegalStateException(ExceptionMessageConstants.SHA256_UNAVAILABLE, ex);
             }
 
             int rawLen = vkBytes.length + 4 + 16 + 1;

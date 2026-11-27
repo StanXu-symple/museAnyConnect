@@ -1,5 +1,9 @@
 package com.muse.connect.config;
 
+import com.muse.connect.constant.ExceptionMessageConstants;
+import com.muse.connect.constant.HttpConstants;
+import com.muse.connect.constant.RouteConstants;
+import com.muse.connect.constant.SecurityConstants;
 import com.muse.connect.service.AdminAuthService;
 import com.muse.connect.service.AdminAuthService.AdminSession;
 import jakarta.servlet.FilterChain;
@@ -29,13 +33,18 @@ import java.util.Set;
 @Component
 public class RelayAuthFilter extends OncePerRequestFilter {
 
-    public static final String HEADER_NAME = "X-Muse-Key";
-    public static final String CSRF_HEADER_NAME = "X-CSRF-Token";
-    public static final String CSRF_PARAM_NAME = "_csrf";
-    public static final String SESSION_COOKIE_NAME = "MUSE_SESSION";
-    public static final String REQUEST_SESSION_ATTR = "muse.admin.session";
+    public static final String HEADER_NAME = SecurityConstants.HEADER_API_KEY;
+    public static final String CSRF_HEADER_NAME = SecurityConstants.HEADER_CSRF_TOKEN;
+    public static final String CSRF_PARAM_NAME = SecurityConstants.PARAM_CSRF;
+    public static final String SESSION_COOKIE_NAME = SecurityConstants.COOKIE_SESSION;
+    public static final String REQUEST_SESSION_ATTR = SecurityConstants.ATTR_ADMIN_SESSION;
 
-    private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS", "TRACE");
+    private static final Set<String> SAFE_METHODS = Set.of(
+            HttpConstants.METHOD_GET,
+            HttpConstants.METHOD_HEAD,
+            HttpConstants.METHOD_OPTIONS,
+            HttpConstants.METHOD_TRACE
+    );
 
     private final AppProperties appProperties;
     private final AdminAuthService adminAuthService;
@@ -55,8 +64,8 @@ public class RelayAuthFilter extends OncePerRequestFilter {
 
         String path = request.getRequestURI();
         if (isPublicPath(path)) {
-            if ("/login".equals(path)) {
-                response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+            if (RouteConstants.LOGIN.equals(path)) {
+                response.setHeader(HttpHeaders.CACHE_CONTROL, SecurityConstants.VALUE_NO_STORE);
             }
             attachSessionIfPresent(request);
             filterChain.doFilter(request, response);
@@ -65,7 +74,7 @@ public class RelayAuthFilter extends OncePerRequestFilter {
 
         Optional<AdminSession> session = attachSessionIfPresent(request);
 
-        if (path.startsWith("/api/")) {
+        if (path.startsWith(RouteConstants.API_PREFIX)) {
             handleApiRequest(request, response, filterChain, session);
             return;
         }
@@ -96,7 +105,7 @@ public class RelayAuthFilter extends OncePerRequestFilter {
             if (!isSafeMethod(request.getMethod())) {
                 String csrf = request.getHeader(CSRF_HEADER_NAME);
                 if (!adminAuthService.verifyCsrf(session.get(), csrf)) {
-                    writeJsonError(response, HttpServletResponse.SC_FORBIDDEN, "Invalid or missing X-CSRF-Token header");
+                    writeJsonError(response, HttpServletResponse.SC_FORBIDDEN, ExceptionMessageConstants.AUTH_INVALID_CSRF_HEADER);
                     return;
                 }
             }
@@ -105,8 +114,8 @@ public class RelayAuthFilter extends OncePerRequestFilter {
         }
 
         String msg = apiKeyConfigured
-                ? "Invalid or missing X-Muse-Key header"
-                : "Authentication required. Please log in or configure X-Muse-Key";
+                ? ExceptionMessageConstants.AUTH_INVALID_API_KEY
+                : ExceptionMessageConstants.AUTH_REQUIRED;
         writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, msg);
     }
 
@@ -125,11 +134,11 @@ public class RelayAuthFilter extends OncePerRequestFilter {
             if (extractSessionCookie(request).isPresent()) {
                 clearSessionCookie(request, response);
             }
-            String redirectTarget = "/login";
-            if ("GET".equalsIgnoreCase(request.getMethod())) {
+            String redirectTarget = RouteConstants.LOGIN;
+            if (HttpConstants.METHOD_GET.equalsIgnoreCase(request.getMethod())) {
                 String requested = buildRequestedPath(request);
-                if (isSafeRedirectTarget(requested) && !"/".equals(requested)) {
-                    redirectTarget = "/login?next=" + URLEncoder.encode(requested, StandardCharsets.UTF_8);
+                if (isSafeRedirectTarget(requested) && !RouteConstants.ROOT.equals(requested)) {
+                    redirectTarget = RouteConstants.LOGIN_NEXT_PREFIX + URLEncoder.encode(requested, StandardCharsets.UTF_8);
                 }
             }
             response.sendRedirect(redirectTarget);
@@ -142,7 +151,7 @@ public class RelayAuthFilter extends OncePerRequestFilter {
                 csrf = request.getParameter(CSRF_PARAM_NAME);
             }
             if (!adminAuthService.verifyCsrf(session.get(), csrf)) {
-                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid CSRF token");
+                response.sendError(HttpServletResponse.SC_FORBIDDEN, ExceptionMessageConstants.AUTH_INVALID_CSRF_TOKEN);
                 return;
             }
         }
@@ -170,10 +179,10 @@ public class RelayAuthFilter extends OncePerRequestFilter {
     }
 
     private boolean isPublicPath(String path) {
-        return "/login".equals(path)
-                || "/health".equals(path)
-                || "/favicon.ico".equals(path)
-                || path.startsWith("/css/");
+        return RouteConstants.LOGIN.equals(path)
+                || RouteConstants.HEALTH.equals(path)
+                || RouteConstants.FAVICON.equals(path)
+                || path.startsWith(RouteConstants.CSS_PREFIX);
     }
 
     private boolean isSafeMethod(String method) {
@@ -183,17 +192,17 @@ public class RelayAuthFilter extends OncePerRequestFilter {
     private String buildRequestedPath(HttpServletRequest request) {
         String uri = request.getRequestURI();
         String query = request.getQueryString();
-        return StringUtils.hasText(query) ? uri + "?" + query : uri;
+        return StringUtils.hasText(query) ? uri + RouteConstants.QUERY_PREFIX + query : uri;
     }
 
     public static boolean isSafeRedirectTarget(String target) {
         return StringUtils.hasText(target)
-                && target.startsWith("/")
-                && !target.startsWith("//")
-                && !target.startsWith("/\\")
-                && !target.contains("\r")
-                && !target.contains("\n")
-                && !target.startsWith("/login");
+                && target.startsWith(RouteConstants.ROOT)
+                && !target.startsWith(RouteConstants.UNSAFE_REDIRECT_DOUBLE_SLASH)
+                && !target.startsWith(RouteConstants.UNSAFE_REDIRECT_BACKSLASH)
+                && !target.contains(RouteConstants.CHAR_CR)
+                && !target.contains(RouteConstants.CHAR_LF)
+                && !target.startsWith(RouteConstants.LOGIN);
     }
 
     public static Optional<String> extractSessionCookie(HttpServletRequest request) {
@@ -210,27 +219,27 @@ public class RelayAuthFilter extends OncePerRequestFilter {
     }
 
     public static void clearSessionCookie(HttpServletRequest request, HttpServletResponse response) {
-        ResponseCookie cleared = ResponseCookie.from(SESSION_COOKIE_NAME, "")
+        ResponseCookie cleared = ResponseCookie.from(SESSION_COOKIE_NAME, RouteConstants.EMPTY)
                 .httpOnly(true)
                 .secure(request.isSecure())
-                .path("/")
-                .sameSite("Lax")
+                .path(RouteConstants.ROOT)
+                .sameSite(SecurityConstants.COOKIE_SAME_SITE_LAX)
                 .maxAge(0)
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cleared.toString());
     }
 
     private void applySecurityHeaders(HttpServletResponse response) {
-        response.setHeader("X-Content-Type-Options", "nosniff");
-        response.setHeader("X-Frame-Options", "DENY");
-        response.setHeader("Referrer-Policy", "same-origin");
+        response.setHeader(SecurityConstants.HEADER_CONTENT_TYPE_OPTIONS, SecurityConstants.VALUE_NOSNIFF);
+        response.setHeader(SecurityConstants.HEADER_FRAME_OPTIONS, SecurityConstants.VALUE_DENY);
+        response.setHeader(SecurityConstants.HEADER_REFERRER_POLICY, SecurityConstants.VALUE_SAME_ORIGIN);
     }
 
     private void writeJsonError(HttpServletResponse response, int status, String message) throws IOException {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.getWriter().write("{\"success\":false,\"statusCode\":" + status + ",\"error\":\"" + message + "\"}");
+        response.getWriter().write(SecurityConstants.FILTER_JSON_ERROR_FMT.formatted(status, message));
     }
 
     private boolean constantTimeEquals(String a, String b) {

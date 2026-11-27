@@ -1,9 +1,11 @@
 package com.muse.connect.model;
 
+import com.muse.connect.constant.ConnectorLabelConstants;
+
 public enum ConnectorType {
-    X("X (Twitter)"),
-    TELEGRAM("Telegram"),
-    SSH("SSH Server");
+    X(ConnectorLabelConstants.TYPE_X),
+    TELEGRAM(ConnectorLabelConstants.TYPE_TELEGRAM),
+    SSH(ConnectorLabelConstants.TYPE_SSH);
 
     private final String label;
 

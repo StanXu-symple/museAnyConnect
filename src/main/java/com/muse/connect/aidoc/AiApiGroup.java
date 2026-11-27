@@ -1,5 +1,7 @@
 package com.muse.connect.aidoc;
 
+import com.muse.connect.constant.RouteConstants;
+
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -19,13 +21,13 @@ public @interface AiApiGroup {
     AiDocMeta value() default AiDocMeta.NONE;
 
     /** 可选的分组显示标题覆盖值。 */
-    String name() default "";
+    String name() default RouteConstants.EMPTY;
 
     /** 可选的分组用途说明覆盖值。 */
-    String description() default "";
+    String description() default RouteConstants.EMPTY;
 
     /** 可选的连接器类型标识覆盖值（如 "X"、"TELEGRAM"、"SSH"）。 */
-    String connectorType() default "";
+    String connectorType() default RouteConstants.EMPTY;
 
     /** 可选的排序权重覆盖值（-1 表示沿用枚举默认顺序）。 */
     int order() default -1;

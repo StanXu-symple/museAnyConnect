@@ -1,12 +1,14 @@
 package com.muse.connect.model;
 
+import com.muse.connect.constant.ConnectorLabelConstants;
+
 public enum AuthMode {
-    BEARER_TOKEN(ConnectorType.X, "Bearer / OAuth2 Token"),
-    OAUTH1A(ConnectorType.X, "OAuth 1.0a (HMAC-SHA1)"),
-    COOKIE_AUTH(ConnectorType.X, "Web Cookie (auth_token + ct0)"),
-    BOT_TOKEN(ConnectorType.TELEGRAM, "Bot API Token"),
-    PASSWORD(ConnectorType.SSH, "SSH Password"),
-    PRIVATE_KEY(ConnectorType.SSH, "SSH Private Key");
+    BEARER_TOKEN(ConnectorType.X, ConnectorLabelConstants.AUTH_BEARER_TOKEN),
+    OAUTH1A(ConnectorType.X, ConnectorLabelConstants.AUTH_OAUTH1A),
+    COOKIE_AUTH(ConnectorType.X, ConnectorLabelConstants.AUTH_COOKIE_AUTH),
+    BOT_TOKEN(ConnectorType.TELEGRAM, ConnectorLabelConstants.AUTH_BOT_TOKEN),
+    PASSWORD(ConnectorType.SSH, ConnectorLabelConstants.AUTH_PASSWORD),
+    PRIVATE_KEY(ConnectorType.SSH, ConnectorLabelConstants.AUTH_PRIVATE_KEY);
 
     private final ConnectorType connectorType;
     private final String label;

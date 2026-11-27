@@ -1,6 +1,8 @@
 package com.muse.connect.controller;
 
 import com.muse.connect.aidoc.AiDocService;
+import com.muse.connect.constant.HttpConstants;
+import com.muse.connect.constant.RouteConstants;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,10 +18,10 @@ import java.util.Map;
  * 该控制器位于 {@code /api/**} 路径下，受 {@code RelayAuthFilter} 统一鉴权保护。
  */
 @RestController
-@RequestMapping("/api/ai")
+@RequestMapping(RouteConstants.API_AI_BASE)
 public class AiDocController {
 
-    private static final MediaType TEXT_MARKDOWN_UTF8 = MediaType.parseMediaType("text/markdown;charset=UTF-8");
+    private static final MediaType TEXT_MARKDOWN_UTF8 = MediaType.parseMediaType(HttpConstants.MIME_TEXT_MARKDOWN_UTF8);
 
     private final AiDocService aiDocService;
 
@@ -27,8 +29,8 @@ public class AiDocController {
         this.aiDocService = aiDocService;
     }
 
-    @GetMapping(value = "/llms.txt", produces = "text/markdown;charset=UTF-8")
-    public ResponseEntity<String> llmsTxt(@RequestParam(defaultValue = "false") boolean onlyActive) {
+    @GetMapping(value = RouteConstants.AI_LLMS_TXT, produces = HttpConstants.MIME_TEXT_MARKDOWN_UTF8)
+    public ResponseEntity<String> llmsTxt(@RequestParam(defaultValue = RouteConstants.DEFAULT_FALSE) boolean onlyActive) {
         String baseUrl = ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();
         String markdown = aiDocService.renderMarkdown(baseUrl, onlyActive);
         return ResponseEntity.ok()
@@ -36,8 +38,8 @@ public class AiDocController {
                 .body(markdown);
     }
 
-    @GetMapping(value = "/catalog", produces = MediaType.APPLICATION_JSON_VALUE)
-    public Map<String, Object> catalog(@RequestParam(defaultValue = "false") boolean onlyActive) {
+    @GetMapping(value = RouteConstants.AI_CATALOG, produces = MediaType.APPLICATION_JSON_VALUE)
+    public Map<String, Object> catalog(@RequestParam(defaultValue = RouteConstants.DEFAULT_FALSE) boolean onlyActive) {
         String baseUrl = ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();
         return aiDocService.buildCatalog(baseUrl, onlyActive);
     }

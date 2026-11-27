@@ -4,6 +4,7 @@ import com.muse.connect.aidoc.AiApiGroup;
 import com.muse.connect.aidoc.AiDocMeta;
 import com.muse.connect.aidoc.AiEndpoint;
 import com.muse.connect.aidoc.AiField;
+import com.muse.connect.constant.RouteConstants;
 import com.muse.connect.model.RelayResponse;
 import com.muse.connect.service.XRelayService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/relay/x/{profileId}")
+@RequestMapping(RouteConstants.API_RELAY_X_BASE)
 @AiApiGroup(AiDocMeta.GROUP_X_RELAY)
 public class XRelayController {
 
@@ -42,7 +43,7 @@ public class XRelayController {
     }
 
     @AiEndpoint(AiDocMeta.EP_X_GENERIC_REQUEST)
-    @PostMapping("/request")
+    @PostMapping(RouteConstants.X_REQUEST)
     public RelayResponse relayRequest(
             @PathVariable @AiField(AiDocMeta.FIELD_X_PROFILE_ID) String profileId,
             @RequestBody GenericXRequest request
@@ -51,7 +52,7 @@ public class XRelayController {
     }
 
     @AiEndpoint(AiDocMeta.EP_X_POST_TWEET)
-    @PostMapping("/tweet")
+    @PostMapping(RouteConstants.X_TWEET)
     public RelayResponse postTweet(
             @PathVariable @AiField(AiDocMeta.FIELD_X_PROFILE_ID) String profileId,
             @RequestBody PostTweetRequest request
@@ -60,17 +61,17 @@ public class XRelayController {
     }
 
     @AiEndpoint(AiDocMeta.EP_X_SEARCH_RECENT)
-    @GetMapping("/search")
+    @GetMapping(RouteConstants.X_SEARCH)
     public RelayResponse search(
             @PathVariable @AiField(AiDocMeta.FIELD_X_PROFILE_ID) String profileId,
             @RequestParam @AiField(AiDocMeta.FIELD_X_SEARCH_QUERY) String query,
-            @RequestParam(defaultValue = "10") @AiField(AiDocMeta.FIELD_X_MAX_RESULTS) int maxResults
+            @RequestParam(defaultValue = RouteConstants.DEFAULT_X_MAX_RESULTS) @AiField(AiDocMeta.FIELD_X_MAX_RESULTS) int maxResults
     ) {
         return xRelayService.searchRecent(profileId, query, maxResults);
     }
 
     @AiEndpoint(AiDocMeta.EP_X_USER_BY_USERNAME)
-    @GetMapping("/users/by/username/{username}")
+    @GetMapping(RouteConstants.X_USER_BY_USERNAME)
     public RelayResponse userByUsername(
             @PathVariable @AiField(AiDocMeta.FIELD_X_PROFILE_ID) String profileId,
             @PathVariable @AiField(AiDocMeta.FIELD_X_USERNAME) String username

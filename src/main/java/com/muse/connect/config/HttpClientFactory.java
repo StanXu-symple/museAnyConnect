@@ -1,5 +1,7 @@
 package com.muse.connect.config;
 
+import com.muse.connect.constant.HttpConstants;
+import com.muse.connect.constant.RouteConstants;
 import com.muse.connect.model.ConnectorConfig;
 import org.springframework.stereotype.Component;
 
@@ -18,18 +20,18 @@ public class HttpClientFactory {
     private final ConcurrentHashMap<String, HttpClient> clientCache = new ConcurrentHashMap<>();
 
     public HttpClient getClient(ConnectorConfig config, int defaultTimeoutMs) {
-        String proxyHost = config.getProxyHost() != null ? config.getProxyHost().trim() : "";
+        String proxyHost = config.getProxyHost() != null ? config.getProxyHost().trim() : RouteConstants.EMPTY;
         Integer proxyPort = config.getProxyPort();
         String cacheKey = (!proxyHost.isEmpty() && proxyPort != null && proxyPort > 0)
-                ? proxyHost + ":" + proxyPort
-                : "DIRECT";
+                ? proxyHost + HttpConstants.COLON + proxyPort
+                : HttpConstants.PROXY_DIRECT_KEY;
 
         int connectTimeout = Math.min(resolveTimeoutMs(config, defaultTimeoutMs), 10_000);
         return clientCache.computeIfAbsent(cacheKey, key -> {
             HttpClient.Builder builder = HttpClient.newBuilder()
                     .connectTimeout(Duration.ofMillis(connectTimeout))
                     .followRedirects(HttpClient.Redirect.NORMAL);
-            if (!"DIRECT".equals(key)) {
+            if (!HttpConstants.PROXY_DIRECT_KEY.equals(key)) {
                 builder.proxy(ProxySelector.of(new InetSocketAddress(proxyHost, proxyPort)));
             }
             return builder.build();
