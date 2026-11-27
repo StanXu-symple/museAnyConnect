@@ -142,7 +142,7 @@ docker pull ghcr.io/stanxu-symple/museanyconnect:latest
 docker run -d \
   --name muse-any-connect \
   -p 8080:8080 \
-  -v $(pwd)/mseAnyConnect/data:/data \
+  -v ~/mseAnyConnect/data:/data \
   -e MUSE_ADMIN_USERNAME="admin" \
   -e MUSE_ADMIN_PASSWORD="change-me-strong-password" \
   -e MUSE_RELAY_API_KEY="your-secret-key" \
@@ -154,7 +154,7 @@ docker run -d \
 - `./data/sqlite/muse-connect.db`（连接器配置持久化，容器升级/重启后自动保留）
 - `./data/logs/muse-any-connect.log`（滚动运行日志）
 
-> **Linux 宿主机权限提示**：镜像使用非 root 用户 `muse`（UID/GID `10001`）运行，如果在 Linux 宿主机挂载本地目录遇到写权限不足，可先执行 `mkdir -p ./data/sqlite ./data/logs && chown -R 10001:10001 ./data`。
+> **自动权限适配**：容器入口脚本会在启动时自动创建 `/data/sqlite` 与 `/data/logs` 并修正挂载目录属主为非 root 用户 `muse`（UID `10001`），随后自动降权启动 Java 进程，Linux 宿主机直接挂载本地目录也无需手动 `chown`。
 
 或使用项目自带的 `docker-compose.yml`（已默认映射 `${MUSE_HOST_DATA_DIR:-./data}:/data`）：
 

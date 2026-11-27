@@ -23,6 +23,7 @@ RUN groupadd --system --gid 10001 muse \
     && chown -R muse:muse /app /data
 
 COPY --from=builder --chown=muse:muse /build/app.jar /app/app.jar
+COPY --chmod=755 docker-entrypoint.sh /app/docker-entrypoint.sh
 
 ENV SERVER_PORT=8080 \
     MUSE_DATA_DIR=/data \
@@ -35,6 +36,4 @@ VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS "http://127.0.0.1:${SERVER_PORT:-8080}/health" >/dev/null || exit 1
 
-USER muse
-
-ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
