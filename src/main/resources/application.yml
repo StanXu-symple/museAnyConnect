@@ -1,0 +1,34 @@
+server:
+  port: ${SERVER_PORT:8080}
+  tomcat:
+    threads:
+      max: 32
+      min-spare: 4
+
+spring:
+  application:
+    name: muse-any-connect
+  datasource:
+    url: jdbc:h2:mem:museconn;DB_CLOSE_DELAY=-1;CACHE_SIZE=1024;MAX_MEMORY_ROWS=100;COMPRESS=TRUE;WRITE_DELAY=0
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
+      idle-timeout: 60000
+      pool-name: MuseH2Pool
+  sql:
+    init:
+      mode: always
+  h2:
+    console:
+      enabled: false
+  thymeleaf:
+    cache: true
+
+muse:
+  relay:
+    api-key: ${MUSE_RELAY_API_KEY:}
+    default-timeout-ms: ${MUSE_DEFAULT_TIMEOUT_MS:15000}
+    activity-buffer-size: ${MUSE_ACTIVITY_BUFFER_SIZE:100}

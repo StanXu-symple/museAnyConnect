@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${editing ? '编辑连接器' : '新建连接器'} + ' - MuseAnyConnect'">配置连接器</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<header class="topbar">
+    <a class="brand" th:href="@{/}">
+        <span>MuseAnyConnect</span>
+        <span class="brand-tag">HTTP Relay</span>
+    </a>
+    <nav class="nav-links">
+        <a class="nav-link" th:href="@{/}">控制台</a>
+        <a class="nav-link" th:href="@{/playground}">在线调试</a>
+    </nav>
+</header>
+
+<main class="container" style="max-width: 860px;">
+    <div th:if="${error}" class="alert alert-error" th:text="${error}"></div>
+
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title" th:text="${editing ? '编辑连接器配置' : '新建连接器配置'}">配置连接器</h2>
+            <a class="btn btn-sm" th:href="@{/}">返回列表</a>
+        </div>
+
+        <form th:action="@{/connectors/save}" th:object="${profile}" method="post">
+            <input type="hidden" name="editing" th:value="${editing}">
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="id">Profile ID（Muse 调用路径标识）</label>
+                    <input id="id" type="text" class="form-control mono" th:field="*{id}"
+                           th:readonly="${editing}"
+                           placeholder="留空自动生成，如 x-main / tg-bot / ssh-prod">
+                </div>
+                <div class="form-group">
+                    <label for="name">连接器名称 *</label>
+                    <input id="name" type="text" class="form-control" th:field="*{name}" required placeholder="例如：Muse 主力 X 账号">
+                </div>
+                <div class="form-group">
+                    <label for="typeSelect">应用类型 *</label>
+                    <select id="typeSelect" class="form-control" th:field="*{type}" onchange="syncFormFields()">
+                        <option th:each="t : ${connectorTypes}" th:value="${t.name()}" th:text="${t.label}"></option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="authModeSelect">连接认证方式 *</label>
+                    <select id="authModeSelect" class="form-control" th:field="*{authMode}" onchange="syncFormFields()">
+                        <option th:each="m : ${authModes}"
+                                th:value="${m.name()}"
+                                th:attr="data-type=${m.connectorType.name()}"
+                                th:text="${m.label}"></option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group" style="flex-direction: row; align-items: center; gap: 10px;">
+                <input id="enabled" type="checkbox" th:field="*{enabled}">
+                <label for="enabled" style="margin: 0;">启用此连接器</label>
+                <span th:if="${editing}" class="muted">（提示：编辑模式下敏感字段保持 <span class="mono">****</span> 或留空将沿用原值）</span>
+            </div>
+
+            <!-- X Bearer -->
+            <div id="section-x-bearer" class="section-box hidden">
+                <h3 class="section-title">X (Twitter) Bearer / OAuth 2.0 配置</h3>
+                <div class="form-group">
+                    <label for="bearerToken">Bearer Token / OAuth 2.0 User Access Token *</label>
+                    <input id="bearerToken" type="text" class="form-control mono" th:field="*{config.bearerToken}" placeholder="AAAA...">
+                </div>
+            </div>
+
+            <!-- X OAuth 1.0a -->
+            <div id="section-x-oauth1a" class="section-box hidden">
+                <h3 class="section-title">X (Twitter) OAuth 1.0a 密钥配置（自动 HMAC-SHA1 签名）</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="apiKey">API Key (Consumer Key) *</label>
+                        <input id="apiKey" type="text" class="form-control mono" th:field="*{config.apiKey}">
+                    </div>
+                    <div class="form-group">
+                        <label for="apiSecret">API Secret (Consumer Secret) *</label>
+                        <input id="apiSecret" type="text" class="form-control mono" th:field="*{config.apiSecret}">
+                    </div>
+                    <div class="form-group">
+                        <label for="accessToken">Access Token *</label>
+                        <input id="accessToken" type="text" class="form-control mono" th:field="*{config.accessToken}">
+                    </div>
+                    <div class="form-group">
+                        <label for="accessTokenSecret">Access Token Secret *</label>
+                        <input id="accessTokenSecret" type="text" class="form-control mono" th:field="*{config.accessTokenSecret}">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Telegram -->
+            <div id="section-telegram" class="section-box hidden">
+                <h3 class="section-title">Telegram Bot API 配置</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="botToken">Bot Token *</label>
+                        <input id="botToken" type="text" class="form-control mono" th:field="*{config.botToken}" placeholder="123456:ABC-DEF...">
+                    </div>
+                    <div class="form-group">
+                        <label for="defaultChatId">默认 Chat ID（可选）</label>
+                        <input id="defaultChatId" type="text" class="form-control mono" th:field="*{config.defaultChatId}" placeholder="例如 -1001234567890">
+                    </div>
+                    <div class="form-group">
+                        <label for="parseMode">默认 Parse Mode（可选）</label>
+                        <select id="parseMode" class="form-control" th:field="*{config.parseMode}">
+                            <option value="">Plain Text</option>
+                            <option value="HTML">HTML</option>
+                            <option value="MarkdownV2">MarkdownV2</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SSH -->
+            <div id="section-ssh" class="section-box hidden">
+                <h3 class="section-title">SSH 远程服务器配置</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="sshHost">主机地址 (Host) *</label>
+                        <input id="sshHost" type="text" class="form-control mono" th:field="*{config.host}" placeholder="192.168.1.10 或 server.example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="sshPort">端口 (Port)</label>
+                        <input id="sshPort" type="number" class="form-control mono" th:field="*{config.port}" placeholder="22">
+                    </div>
+                    <div class="form-group">
+                        <label for="sshUser">用户名 (Username) *</label>
+                        <input id="sshUser" type="text" class="form-control mono" th:field="*{config.username}" placeholder="ubuntu / root">
+                    </div>
+                    <div class="form-group">
+                        <label for="allowedCommandPrefixes">允许命令前缀白名单（可选，逗号分隔）</label>
+                        <input id="allowedCommandPrefixes" type="text" class="form-control mono" th:field="*{config.allowedCommandPrefixes}" placeholder="例如：ls,df,uname,docker ps（留空不限制）">
+                    </div>
+                </div>
+
+                <div id="section-ssh-password" class="form-group hidden">
+                    <label for="sshPassword">SSH 登录密码 *</label>
+                    <input id="sshPassword" type="password" class="form-control mono" th:field="*{config.password}">
+                </div>
+
+                <div id="section-ssh-key" class="hidden">
+                    <div class="form-group">
+                        <label for="sshPrivateKey">OpenSSH / PEM 私钥内容 *</label>
+                        <textarea id="sshPrivateKey" class="form-control mono" th:field="*{config.privateKey}" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="sshPassphrase">私钥密码 Passphrase（如无留空）</label>
+                        <input id="sshPassphrase" type="password" class="form-control mono" th:field="*{config.passphrase}">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Common HTTP / Timeout -->
+            <div class="section-box">
+                <h3 class="section-title">通用网络与超时参数（可选）</h3>
+                <div class="form-grid">
+                    <div id="httpBaseUrlWrap" class="form-group">
+                        <label for="apiBaseUrl">自定义 API Base URL（留空使用官方默认）</label>
+                        <input id="apiBaseUrl" type="text" class="form-control mono" th:field="*{config.apiBaseUrl}" placeholder="https://api.x.com 或反代地址">
+                    </div>
+                    <div class="form-group">
+                        <label for="timeoutMs">请求超时毫秒 (Timeout ms)</label>
+                        <input id="timeoutMs" type="number" class="form-control mono" th:field="*{config.timeoutMs}" placeholder="15000">
+                    </div>
+                    <div id="proxyHostWrap" class="form-group">
+                        <label for="proxyHost">HTTP 代理主机（仅 X / Telegram）</label>
+                        <input id="proxyHost" type="text" class="form-control mono" th:field="*{config.proxyHost}" placeholder="127.0.0.1">
+                    </div>
+                    <div id="proxyPortWrap" class="form-group">
+                        <label for="proxyPort">HTTP 代理端口</label>
+                        <input id="proxyPort" type="number" class="form-control mono" th:field="*{config.proxyPort}" placeholder="7890">
+                    </div>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button type="submit" class="btn btn-primary">保存配置</button>
+                <a class="btn" th:href="@{/}">取消</a>
+            </div>
+        </form>
+    </div>
+</main>
+
+<script>
+function syncFormFields() {
+    const type = document.getElementById('typeSelect').value;
+    const authSelect = document.getElementById('authModeSelect');
+    let firstValid = null;
+    let currentValid = false;
+
+    for (const opt of authSelect.options) {
+        const matches = opt.dataset.type === type;
+        opt.hidden = !matches;
+        opt.disabled = !matches;
+        if (matches && !firstValid) firstValid = opt.value;
+        if (matches && opt.value === authSelect.value) currentValid = true;
+    }
+    if (!currentValid && firstValid) {
+        authSelect.value = firstValid;
+    }
+    const mode = authSelect.value;
+
+    toggle('section-x-bearer', type === 'X' && mode === 'BEARER_TOKEN');
+    toggle('section-x-oauth1a', type === 'X' && mode === 'OAUTH1A');
+    toggle('section-telegram', type === 'TELEGRAM');
+    toggle('section-ssh', type === 'SSH');
+    toggle('section-ssh-password', type === 'SSH' && mode === 'PASSWORD');
+    toggle('section-ssh-key', type === 'SSH' && mode === 'PRIVATE_KEY');
+
+    toggle('httpBaseUrlWrap', type !== 'SSH');
+    toggle('proxyHostWrap', type !== 'SSH');
+    toggle('proxyPortWrap', type !== 'SSH');
+}
+
+function toggle(id, show) {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden', !show);
+}
+
+document.addEventListener('DOMContentLoaded', syncFormFields);
+</script>
+</body>
+</html>

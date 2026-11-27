@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MuseAnyConnect - HTTP 连接器中转站</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<header class="topbar">
+    <a class="brand" th:href="@{/}">
+        <span>MuseAnyConnect</span>
+        <span class="brand-tag">HTTP Relay</span>
+    </a>
+    <nav class="nav-links">
+        <a class="nav-link active" th:href="@{/}">控制台</a>
+        <a class="nav-link" th:href="@{/playground}">在线调试</a>
+        <a class="btn btn-primary btn-sm" th:href="@{/connectors/new(type='X')}">+ X 连接</a>
+        <a class="btn btn-primary btn-sm" th:href="@{/connectors/new(type='TELEGRAM')}">+ Telegram</a>
+        <a class="btn btn-primary btn-sm" th:href="@{/connectors/new(type='SSH')}">+ SSH 服务器</a>
+    </nav>
+</header>
+
+<main class="container">
+    <div th:if="${message}" class="alert alert-success" th:text="${message}"></div>
+    <div th:if="${error}" class="alert alert-error" th:text="${error}"></div>
+    <div th:if="${apiKeyEnabled}" class="alert alert-warn">
+        已启用 API Key 鉴权：Muse 调用 <span class="mono">/api/**</span> 接口时请在请求头携带 <span class="mono">X-Muse-Key</span>。
+    </div>
+
+    <section class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">已配置连接器</div>
+            <div class="stat-value" th:text="${stats.connectorCount}">0</div>
+            <div class="stat-sub">已启用：<span th:text="${stats.enabledCount}">0</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">H2 数据库有效数据</div>
+            <div class="stat-value"><span th:text="${stats.h2DataBytes}">0</span> B</div>
+            <div class="stat-sub">CACHE_SIZE=1024 KB / 仅单表配置</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">JVM 堆内存使用</div>
+            <div class="stat-value"><span th:text="${stats.jvmUsedMemoryMb}">0</span> MB</div>
+            <div class="stat-sub">上限 <span th:text="${stats.jvmMaxMemoryMb}">0</span> MB</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">环形日志缓冲区</div>
+            <div class="stat-value"><span th:text="${stats.activityCount}">0</span> / <span th:text="${stats.activityBufferCapacity}">100</span></div>
+            <div class="stat-sub">仅驻留 JVM，不写入 H2</div>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="card-header">
+            <h2 class="card-title">连接器配置管理</h2>
+            <div class="btn-group">
+                <a class="btn btn-sm" th:href="@{/connectors/export}">导出 JSON</a>
+                <button type="button" class="btn btn-sm" onclick="document.getElementById('importPanel').classList.toggle('hidden')">导入 JSON</button>
+            </div>
+        </div>
+
+        <div id="importPanel" class="section-box hidden">
+            <form th:action="@{/connectors/import}" method="post">
+                <div class="form-group">
+                    <label for="jsonPayload">粘贴导出的连接器 JSON 数组（纯内存模式重启后可快速恢复）</label>
+                    <textarea id="jsonPayload" name="jsonPayload" class="form-control mono" placeholder='[{"id":"ssh-prod","name":"Prod Host","type":"SSH","authMode":"PRIVATE_KEY","enabled":true,"config":{...}}]' required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm">执行导入</button>
+            </form>
+        </div>
+
+        <div th:if="${#lists.isEmpty(connectors)}" class="muted" style="padding: 18px 0;">
+            暂无连接器配置。点击右上角按钮添加 <strong>X</strong>、<strong>Telegram</strong> 或 <strong>SSH</strong> 连接。
+        </div>
+
+        <div th:if="${!#lists.isEmpty(connectors)}" class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>ID / 名称</th>
+                    <th>类型</th>
+                    <th>认证方式</th>
+                    <th>目标 / 端点摘要</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="c : ${connectors}">
+                    <td>
+                        <div style="font-weight:600;" th:text="${c.name}">name</div>
+                        <div class="mono muted" th:text="${c.id}">id</div>
+                    </td>
+                    <td>
+                        <span class="badge" th:classappend="'badge-' + ${c.type.name()}" th:text="${c.type.label}">X</span>
+                    </td>
+                    <td>
+                        <span class="mono" th:text="${c.authMode.name()}">BEARER_TOKEN</span>
+                        <div class="muted" th:text="${c.authMode.label}">desc</div>
+                    </td>
+                    <td class="mono">
+                        <span th:if="${c.type.name() == 'SSH'}"
+                              th:text="${c.config.username + '@' + c.config.host + ':' + (c.config.port != null ? c.config.port : 22)}"></span>
+                        <span th:if="${c.type.name() == 'TELEGRAM'}"
+                              th:text="${(c.config.apiBaseUrl != null ? c.config.apiBaseUrl : 'https://api.telegram.org') + (c.config.defaultChatId != null ? ' (chat: ' + c.config.defaultChatId + ')' : '')}"></span>
+                        <span th:if="${c.type.name() == 'X'}"
+                              th:text="${c.config.apiBaseUrl != null ? c.config.apiBaseUrl : 'https://api.x.com'}"></span>
+                    </td>
+                    <td>
+                        <span th:if="${c.enabled}" class="badge badge-ok">已启用</span>
+                        <span th:if="${!c.enabled}" class="badge badge-off">已停用</span>
+                    </td>
+                    <td>
+                        <div class="btn-group">
+                            <form class="inline-form" th:action="@{/connectors/{id}/test(id=${c.id})}" method="post">
+                                <button type="submit" class="btn btn-sm">测试</button>
+                            </form>
+                            <a class="btn btn-sm" th:href="@{/playground(profileId=${c.id})}">调试</a>
+                            <a class="btn btn-sm" th:href="@{/connectors/{id}/edit(id=${c.id})}">编辑</a>
+                            <form class="inline-form" th:action="@{/connectors/{id}/toggle(id=${c.id})}" method="post">
+                                <button type="submit" class="btn btn-sm" th:text="${c.enabled ? '停用' : '启用'}">停用</button>
+                            </form>
+                            <form class="inline-form" th:action="@{/connectors/{id}/delete(id=${c.id})}" method="post" onsubmit="return confirm('确认删除该连接器配置？');">
+                                <button type="submit" class="btn btn-danger btn-sm">删除</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="card-header">
+            <h2 class="card-title">最近中转调用记录（JVM 环形缓冲）</h2>
+            <span class="muted">仅展示最近 25 条，不占用 H2 内存</span>
+        </div>
+        <div th:if="${#lists.isEmpty(activities)}" class="muted">暂无调用记录。</div>
+        <div th:if="${!#lists.isEmpty(activities)}" class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>时间</th>
+                    <th>Profile ID</th>
+                    <th>类型</th>
+                    <th>动作</th>
+                    <th>结果</th>
+                    <th>耗时</th>
+                    <th>摘要</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="a : ${activities}">
+                    <td class="mono" th:text="${a.formattedTime()}">12:00:00</td>
+                    <td class="mono" th:text="${a.profileId}">id</td>
+                    <td><span class="badge" th:classappend="'badge-' + ${a.connectorType.name()}" th:text="${a.connectorType.name()}">X</span></td>
+                    <td class="mono" th:text="${a.action}">action</td>
+                    <td>
+                        <span class="badge" th:classappend="${a.success ? 'badge-ok' : 'badge-err'}"
+                              th:text="${(a.success ? 'OK ' : 'ERR ') + a.statusCode}">OK 200</span>
+                    </td>
+                    <td class="mono" th:text="${a.durationMs + ' ms'}">10 ms</td>
+                    <td class="mono muted" th:text="${a.summary}">summary</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>
+</body>
+</html>

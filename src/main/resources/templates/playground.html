@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线 HTTP 中转调试 - MuseAnyConnect</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<header class="topbar">
+    <a class="brand" th:href="@{/}">
+        <span>MuseAnyConnect</span>
+        <span class="brand-tag">HTTP Relay</span>
+    </a>
+    <nav class="nav-links">
+        <a class="nav-link" th:href="@{/}">控制台</a>
+        <a class="nav-link active" th:href="@{/playground}">在线调试</a>
+    </nav>
+</header>
+
+<main class="container">
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Muse HTTP Relay Playground</h2>
+            <a class="btn btn-sm" th:href="@{/}">返回控制台</a>
+        </div>
+
+        <div th:if="${#lists.isEmpty(connectors)}" class="muted">
+            请先在控制台创建一个连接器配置后再进行调试。
+        </div>
+
+        <div th:if="${!#lists.isEmpty(connectors)}">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="profileSelect">选择连接器 Profile</label>
+                    <select id="profileSelect" class="form-control" onchange="onProfileChange()">
+                        <option th:each="c : ${connectors}"
+                                th:value="${c.id}"
+                                th:attr="data-type=${c.type.name()}"
+                                th:selected="${selectedProfileId != null && selectedProfileId == c.id}"
+                                th:text="${c.name + ' [' + c.type.name() + ' / ' + c.id + ']' + (c.enabled ? '' : ' (已停用)')}">
+                        </option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="actionSelect">中转接口模板</label>
+                    <select id="actionSelect" class="form-control" onchange="onActionChange()"></select>
+                </div>
+                <div th:if="${apiKeyEnabled}" class="form-group">
+                    <label for="museKeyInput">X-Muse-Key 请求头</label>
+                    <input id="museKeyInput" type="password" class="form-control mono" placeholder="输入配置的 API Key" oninput="renderCurl()">
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="httpMethodInput">HTTP Method</label>
+                    <input id="httpMethodInput" type="text" class="form-control mono" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="endpointInput">请求路径</label>
+                    <input id="endpointInput" type="text" class="form-control mono" oninput="renderCurl()">
+                </div>
+            </div>
+
+            <div id="bodyWrap" class="form-group">
+                <label for="bodyInput">JSON Request Body</label>
+                <textarea id="bodyInput" class="form-control mono" oninput="renderCurl()"></textarea>
+            </div>
+
+            <div class="btn-group" style="margin-bottom: 18px;">
+                <button type="button" class="btn btn-primary" onclick="sendRelay()">发送中转请求</button>
+            </div>
+
+            <div class="form-group">
+                <label>Muse 调用示例 (curl)</label>
+                <div id="curlPreview" class="code-block"></div>
+            </div>
+
+            <div class="form-group">
+                <label>中转响应结果 <span id="respMeta" class="muted"></span></label>
+                <div id="respOutput" class="code-block">等待发送请求...</div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+const TEMPLATES = {
+    X: [
+        {
+            name: '快捷搜推文 (GET /search)',
+            method: 'GET',
+            path: '/api/relay/x/{id}/search?query=spring%20boot&maxResults=10',
+            body: ''
+        },
+        {
+            name: '查用户信息 (GET /users/by/username)',
+            method: 'GET',
+            path: '/api/relay/x/{id}/users/by/username/X',
+            body: ''
+        },
+        {
+            name: '快捷发推 (POST /tweet)',
+            method: 'POST',
+            path: '/api/relay/x/{id}/tweet',
+            body: JSON.stringify({ text: 'Hello from MuseAnyConnect!' }, null, 2)
+        },
+        {
+            name: '通用 X API 转发 (POST /request)',
+            method: 'POST',
+            path: '/api/relay/x/{id}/request',
+            body: JSON.stringify({ method: 'GET', path: '/2/users/me', queryParams: {} }, null, 2)
+        }
+    ],
+    TELEGRAM: [
+        {
+            name: '发送消息 (POST /send)',
+            method: 'POST',
+            path: '/api/relay/telegram/{id}/send',
+            body: JSON.stringify({ chatId: '', text: 'Hello from Muse!', parseMode: 'HTML' }, null, 2)
+        },
+        {
+            name: '拉取更新 (GET /updates)',
+            method: 'GET',
+            path: '/api/relay/telegram/{id}/updates?limit=10',
+            body: ''
+        },
+        {
+            name: '通用 Bot 方法 getMe (POST /method/getMe)',
+            method: 'POST',
+            path: '/api/relay/telegram/{id}/method/getMe',
+            body: '{}'
+        }
+    ],
+    SSH: [
+        {
+            name: '执行远程命令 (POST /exec)',
+            method: 'POST',
+            path: '/api/relay/ssh/{id}/exec',
+            body: JSON.stringify({ command: 'uname -a && uptime', timeoutMs: 10000 }, null, 2)
+        },
+        {
+            name: '读取远程文件 (POST /sftp/read)',
+            method: 'POST',
+            path: '/api/relay/ssh/{id}/sftp/read',
+            body: JSON.stringify({ remotePath: '/etc/hostname', maxBytes: 4096 }, null, 2)
+        },
+        {
+            name: '写入远程文件 (POST /sftp/write)',
+            method: 'POST',
+            path: '/api/relay/ssh/{id}/sftp/write',
+            body: JSON.stringify({ remotePath: '/tmp/muse-test.txt', content: 'hello muse\n', append: false }, null, 2)
+        }
+    ]
+};
+
+function onProfileChange() {
+    const sel = document.getElementById('profileSelect');
+    if (!sel || !sel.selectedOptions.length) return;
+    const type = sel.selectedOptions[0].dataset.type;
+    const actionSelect = document.getElementById('actionSelect');
+    actionSelect.innerHTML = '';
+    (TEMPLATES[type] || []).forEach((tpl, idx) => {
+        const opt = document.createElement('option');
+        opt.value = idx;
+        opt.textContent = tpl.name;
+        actionSelect.appendChild(opt);
+    });
+    onActionChange();
+}
+
+function onActionChange() {
+    const sel = document.getElementById('profileSelect');
+    const profileId = sel.value;
+    const type = sel.selectedOptions[0].dataset.type;
+    const idx = parseInt(document.getElementById('actionSelect').value || '0', 10);
+    const tpl = (TEMPLATES[type] || [])[idx];
+    if (!tpl) return;
+    document.getElementById('httpMethodInput').value = tpl.method;
+    document.getElementById('endpointInput').value = tpl.path.replace('{id}', profileId);
+    document.getElementById('bodyInput').value = tpl.body;
+    document.getElementById('bodyWrap').classList.toggle('hidden', tpl.method === 'GET');
+    renderCurl();
+}
+
+function renderCurl() {
+    const method = document.getElementById('httpMethodInput').value;
+    const endpoint = document.getElementById('endpointInput').value;
+    const body = document.getElementById('bodyInput').value.trim();
+    const keyInput = document.getElementById('museKeyInput');
+    const keyHeader = (keyInput && keyInput.value.trim()) ? ` -H "X-Muse-Key: ${keyInput.value.trim()}"` : '';
+    const origin = window.location.origin;
+    let cmd = `curl -X ${method} "${origin}${endpoint}"${keyHeader}`;
+    if (method !== 'GET' && body) {
+        cmd += ` -H "Content-Type: application/json" -d '${body.replace(/\n\s*/g, ' ')}'`;
+    }
+    document.getElementById('curlPreview').textContent = cmd;
+}
+
+async function sendRelay() {
+    const method = document.getElementById('httpMethodInput').value;
+    const endpoint = document.getElementById('endpointInput').value;
+    const body = document.getElementById('bodyInput').value.trim();
+    const keyInput = document.getElementById('museKeyInput');
+    const headers = { 'Accept': 'application/json' };
+    if (keyInput && keyInput.value.trim()) {
+        headers['X-Muse-Key'] = keyInput.value.trim();
+    }
+    const opts = { method, headers };
+    if (method !== 'GET' && body) {
+        headers['Content-Type'] = 'application/json';
+        opts.body = body;
+    }
+
+    const out = document.getElementById('respOutput');
+    const meta = document.getElementById('respMeta');
+    out.textContent = '请求发送中...';
+    const t0 = performance.now();
+    try {
+        const res = await fetch(endpoint, opts);
+        const text = await res.text();
+        const elapsed = Math.round(performance.now() - t0);
+        meta.textContent = `HTTP ${res.status} (${elapsed} ms)`;
+        try {
+            out.textContent = JSON.stringify(JSON.parse(text), null, 2);
+        } catch {
+            out.textContent = text;
+        }
+    } catch (err) {
+        meta.textContent = '请求异常';
+        out.textContent = String(err);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', onProfileChange);
+</script>
+</body>
+</html>
