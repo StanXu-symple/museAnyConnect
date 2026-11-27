@@ -77,6 +77,36 @@
                     <label for="bearerToken">Bearer Token / OAuth 2.0 User Access Token *</label>
                     <input id="bearerToken" type="text" class="form-control mono" th:field="*{config.bearerToken}" placeholder="AAAA...">
                 </div>
+
+                <details class="guide-box" th:attr="open=${!editing ? 'open' : null}">
+                    <summary class="guide-summary">📖 获取教程：如何拿到 X 的 Bearer Token / OAuth 2.0 Token</summary>
+                    <div class="guide-body">
+                        <div class="guide-sub-title">方式一：App-Only Bearer Token（最快，适合只读搜推文 / 查公开用户）</div>
+                        <ol class="guide-steps">
+                            <li>登录 X 开发者后台：<a href="https://developer.x.com/en/portal/dashboard" target="_blank" rel="noopener noreferrer">developer.x.com/en/portal/dashboard</a>，创建或打开你的 <strong>Project &amp; App</strong>。</li>
+                            <li>进入该 App 的 <strong>Keys and tokens</strong> 标签页。</li>
+                            <li>在 <strong>Authentication Tokens → Bearer Token</strong> 区域点击 <strong>Generate</strong>（或 Regenerate）。</li>
+                            <li>复制生成的长字符串（通常以 <span class="inline-code">AAAA...</span> 开头），直接粘贴到上方输入框保存即可。</li>
+                        </ol>
+                        <div class="guide-note">
+                            <strong>权限说明：</strong>App-Only Bearer Token 仅支持读取公开数据（如搜索推文、查用户信息），<strong>无法代表个人账号发推</strong>，也不支持调用 <span class="inline-code">/2/users/me</span>（本平台“测试”按钮会自动改测公开端点 <span class="inline-code">/2/users/by/username/X</span>）。
+                        </div>
+
+                        <div class="guide-sub-title">方式二：OAuth 2.0 User Access Token（PKCE，支持以用户身份发推与读取）</div>
+                        <ol class="guide-steps">
+                            <li>进入 App 的 <strong>Settings → User authentication settings</strong>，点击 <strong>Set up / Edit</strong>。</li>
+                            <li><strong>App permissions</strong> 选择 <span class="inline-code">Read and write</span>；<strong>Type of App</strong> 选择 <span class="inline-code">Web App, Automated App or Bot</span>（或 Native App）；填写 <strong>Callback URI</strong>（如 <span class="inline-code">http://localhost:8080/callback</span>）与 <strong>Website URL</strong> 并保存。</li>
+                            <li>切回 <strong>Keys and tokens → OAuth 2.0 Client ID and Client Secret</strong>，记录 <span class="inline-code">Client ID</span> 与 <span class="inline-code">Client Secret</span>。</li>
+                            <li>浏览器访问授权链接获取 <span class="inline-code">code</span>（携带 PKCE <span class="inline-code">code_challenge</span>，示例 Scope：<span class="inline-code">tweet.read tweet.write users.read offline.access</span>）：<br>
+                                <span class="inline-code">https://x.com/i/oauth2/authorize?response_type=code&amp;client_id=&lt;CLIENT_ID&gt;&amp;redirect_uri=&lt;CALLBACK_URI&gt;&amp;scope=tweet.read%20tweet.write%20users.read%20offline.access&amp;state=muse&amp;code_challenge=&lt;CHALLENGE&gt;&amp;code_challenge_method=S256</span>
+                            </li>
+                            <li>同意授权后从回调地址取出 <span class="inline-code">code</span>，调用 <span class="inline-code">POST https://api.x.com/2/oauth2/token</span>（<span class="inline-code">grant_type=authorization_code</span> + <span class="inline-code">code</span> + <span class="inline-code">code_verifier</span>）换取 JSON 中的 <span class="inline-code">access_token</span>，粘贴到上方输入框。</li>
+                        </ol>
+                        <div class="guide-tip">
+                            <strong>选型建议：</strong>OAuth 2.0 User Access Token 默认 <strong>2 小时过期</strong>（需配合 <span class="inline-code">refresh_token</span> 定时续期）。如果你希望一次配置长期自动发推，建议直接在上方将“连接认证方式”切换为 <strong>OAuth 1.0a (HMAC-SHA1)</strong>。
+                        </div>
+                    </div>
+                </details>
             </div>
 
             <!-- X OAuth 1.0a -->
@@ -100,6 +130,36 @@
                         <input id="accessTokenSecret" type="text" class="form-control mono" th:field="*{config.accessTokenSecret}">
                     </div>
                 </div>
+
+                <details class="guide-box" th:attr="open=${!editing ? 'open' : null}">
+                    <summary class="guide-summary">📖 获取教程：如何拿到 X 的 OAuth 1.0a 四个密钥（推荐长期发推）</summary>
+                    <div class="guide-body">
+                        <ol class="guide-steps">
+                            <li>登录 X 开发者后台：<a href="https://developer.x.com/en/portal/dashboard" target="_blank" rel="noopener noreferrer">developer.x.com/en/portal/dashboard</a>，创建或打开你的 <strong>Project &amp; App</strong>。</li>
+                            <li><strong>先配置读写权限（关键步骤）</strong>：进入 App 的 <strong>Settings → User authentication settings</strong>，点击 <strong>Set up / Edit</strong>：
+                                <br>• <strong>App permissions</strong>：选择 <span class="inline-code">Read and write</span>（若需私信选 Read and write and Direct message）。
+                                <br>• <strong>Type of App</strong>：选择 <span class="inline-code">Web App, Automated App or Bot</span>。
+                                <br>• <strong>Callback URI / Website URL</strong>：填入合法网址（如 <span class="inline-code">http://localhost:8080/callback</span>）后点击 <strong>Save</strong>。
+                            </li>
+                            <li>切回 App 的 <strong>Keys and tokens</strong> 标签页，在 <strong>Consumer Keys</strong> 区域点击 <strong>Regenerate</strong>（或 View）：
+                                <br>• 复制 <strong>API Key</strong> → 填入上方 <span class="inline-code">API Key (Consumer Key)</span>
+                                <br>• 复制 <strong>API Key Secret</strong> → 填入上方 <span class="inline-code">API Secret (Consumer Secret)</span>
+                            </li>
+                            <li>向下滚动到 <strong>Authentication Tokens → Access Token and Secret</strong>，点击 <strong>Generate / Regenerate</strong>：
+                                <br>• 复制 <strong>Access Token</strong> → 填入上方 <span class="inline-code">Access Token</span>
+                                <br>• 复制 <strong>Access Token Secret</strong> → 填入上方 <span class="inline-code">Access Token Secret</span>
+                                <br>• 确认该区域提示为 <span class="inline-code">Created with Read and Write permissions</span>。
+                            </li>
+                            <li>保存后在控制台点击 <strong>测试</strong>（验证 <span class="inline-code">GET /2/users/me</span> 返回 200 即表示四元组可用）。</li>
+                        </ol>
+                        <div class="guide-note">
+                            <strong>常见踩坑：</strong>如果之前在只读状态下生成过 Access Token，之后再改权限，旧 Token 依然没有写权限（发推会报 <span class="inline-code">403 Forbidden</span>）。修改权限后<strong>必须重新点击 Regenerate</strong> 生成新的 Access Token 与 Secret。
+                        </div>
+                        <div class="guide-tip">
+                            <strong>推荐理由：</strong>OAuth 1.0a 凭证不会自动过期（除非你手动重置），本中转站已内置 HMAC-SHA1 自动签名，最适合 Muse 长期稳定发推和查账号。
+                        </div>
+                    </div>
+                </details>
             </div>
 
             <!-- Telegram -->
@@ -123,6 +183,20 @@
                         </select>
                     </div>
                 </div>
+
+                <details class="guide-box" th:attr="open=${!editing ? 'open' : null}">
+                    <summary class="guide-summary">📖 获取教程：如何拿到 Telegram Bot Token 与 Chat ID</summary>
+                    <div class="guide-body">
+                        <ol class="guide-steps">
+                            <li><strong>创建机器人拿 Token</strong>：在 Telegram 中搜索官方账号 <span class="inline-code">@BotFather</span>，发送 <span class="inline-code">/newbot</span>，依次输入机器人显示名称和以 <span class="inline-code">bot</span> 结尾的用户名，复制返回的 HTTP API Token（形如 <span class="inline-code">123456789:ABCdef...</span>）填入上方 <strong>Bot Token</strong>。</li>
+                            <li><strong>获取私聊 Chat ID</strong>：先打开刚创建的机器人发送一条任意消息（如 <span class="inline-code">/start</span>），保存本配置后到 <strong>在线调试</strong> 调用 <span class="inline-code">GET /updates</span>，从响应的 <span class="inline-code">result[].message.chat.id</span> 中即可拿到数字 ID。</li>
+                            <li><strong>获取群组 / 频道 Chat ID</strong>：将机器人拉入群组或设为频道管理员，在群里发一条消息后同样调用 <span class="inline-code">GET /updates</span>，超级群组/频道的 Chat ID 通常以 <span class="inline-code">-100</span> 开头。</li>
+                        </ol>
+                        <div class="guide-tip">
+                            <strong>网络提示：</strong>若部署服务器无法直连 <span class="inline-code">api.telegram.org</span>，可在下方“通用网络与超时参数”配置 HTTP 代理或反代 Base URL。
+                        </div>
+                    </div>
+                </details>
             </div>
 
             <!-- SSH -->
@@ -150,6 +224,19 @@
                 <div id="section-ssh-password" class="form-group hidden">
                     <label for="sshPassword">SSH 登录密码 *</label>
                     <input id="sshPassword" type="password" class="form-control mono" th:field="*{config.password}">
+
+                    <details class="guide-box" th:attr="open=${!editing ? 'open' : null}">
+                        <summary class="guide-summary">📖 配置说明：SSH 密码认证注意事项</summary>
+                        <div class="guide-body">
+                            <ol class="guide-steps">
+                                <li>确认目标服务器已开启 SSH 服务（默认端口 <span class="inline-code">22</span>），且 <span class="inline-code">/etc/ssh/sshd_config</span> 中 <span class="inline-code">PasswordAuthentication yes</span> 已启用。</li>
+                                <li>建议为 Muse 创建专用低权限系统账号，并在上方“允许命令前缀白名单”中限制可执行命令（例如 <span class="inline-code">ls,df,uname,uptime,docker ps</span>）。</li>
+                            </ol>
+                            <div class="guide-tip">
+                                <strong>安全建议：</strong>生产环境优先推荐使用 <strong>SSH Private Key</strong> 私钥认证，并在服务器禁用密码登录。
+                            </div>
+                        </div>
+                    </details>
                 </div>
 
                 <div id="section-ssh-key" class="hidden">
@@ -161,6 +248,17 @@
                         <label for="sshPassphrase">私钥密码 Passphrase（如无留空）</label>
                         <input id="sshPassphrase" type="password" class="form-control mono" th:field="*{config.passphrase}">
                     </div>
+
+                    <details class="guide-box" th:attr="open=${!editing ? 'open' : null}">
+                        <summary class="guide-summary">📖 获取教程：如何生成并配置 SSH 私钥（支持 Ed25519 / RSA / ECDSA）</summary>
+                        <div class="guide-body">
+                            <ol class="guide-steps">
+                                <li>生成专用密钥对：<span class="inline-code">ssh-keygen -t ed25519 -C "muse-relay" -f ~/.ssh/muse_ed25519</span>（不需要口令可直接回车留空）。</li>
+                                <li>把<strong>公钥</strong>部署到目标服务器：<span class="inline-code">ssh-copy-id -i ~/.ssh/muse_ed25519.pub 用户名@服务器IP</span>（或手动将 <span class="inline-code">muse_ed25519.pub</span> 追加到目标机 <span class="inline-code">~/.ssh/authorized_keys</span>，并执行 <span class="inline-code">chmod 600 ~/.ssh/authorized_keys</span>）。</li>
+                                <li>查看并复制<strong>私钥全文</strong>：<span class="inline-code">cat ~/.ssh/muse_ed25519</span>，将包含 <span class="inline-code">-----BEGIN ... PRIVATE KEY-----</span> 与 <span class="inline-code">-----END ... PRIVATE KEY-----</span> 的完整内容粘贴到上方私钥框；如设置了口令则填入 Passphrase。</li>
+                            </ol>
+                        </div>
+                    </details>
                 </div>
             </div>
 

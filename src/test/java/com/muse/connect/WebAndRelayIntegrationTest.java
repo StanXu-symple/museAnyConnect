@@ -173,9 +173,15 @@ class WebAndRelayIntegrationTest {
                 .andReturn();
         String csrfToken = extractCsrfToken(homeResult.getResponse().getContentAsString());
 
+        mockMvc.perform(get("/connectors/new").param("type", "X").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("如何拿到 X 的 Bearer Token / OAuth 2.0 Token")))
+                .andExpect(content().string(containsString("如何拿到 X 的 OAuth 1.0a 四个密钥")));
+
         mockMvc.perform(get("/connectors/new").param("type", "SSH").cookie(sessionCookie))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("SSH 远程服务器配置")));
+                .andExpect(content().string(containsString("SSH 远程服务器配置")))
+                .andExpect(content().string(containsString("如何生成并配置 SSH 私钥")));
 
         mockMvc.perform(get("/playground").param("profileId", "x-mock").cookie(sessionCookie))
                 .andExpect(status().isOk())

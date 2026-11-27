@@ -160,21 +160,28 @@ docker run -d --name muse-any-connect -p 8080:8080 muse-any-connect:local
 
 ## 4. 连接器配置与认证方式
 
+> 控制台的新建 / 编辑连接器页面已内置各平台与各认证方式的**分步获取教程**（切换应用类型与认证方式时自动联动展示）。
+
 ### 4.1 X (Twitter)
 - **认证方式 (`authMode`)**：
-  - `BEARER_TOKEN`：使用 Bearer Token 调用 X API v2（读推文、搜索、查用户或 OAuth 2.0 User Token 发推）。
-  - `OAUTH1A`：配置 `apiKey`、`apiSecret`、`accessToken`、`accessTokenSecret`，中转站自动生成 HMAC-SHA1 `Authorization: OAuth ...` 请求头。
+  - `BEARER_TOKEN`：使用 Bearer Token 调用 X API v2（App-Only Bearer Token 仅读公开数据；OAuth 2.0 User Access Token 支持读写，默认 2 小时过期）。
+  - `OAUTH1A`：配置 `apiKey`、`apiSecret`、`accessToken`、`accessTokenSecret`，中转站自动生成 HMAC-SHA1 `Authorization: OAuth ...` 请求头（**推荐长期自动发推**，凭证不会自动过期）。
+- **如何获取**：
+  - **App-Only Bearer Token**：登录 `developer.x.com/en/portal/dashboard` → 打开 App → **Keys and tokens** → **Bearer Token** → **Generate**。
+  - **OAuth 2.0 User Access Token (PKCE)**：在 **Settings → User authentication settings** 开启 `Read and write` 与 Callback URI → 记录 `Client ID` → 通过 `https://x.com/i/oauth2/authorize` 授权拿 `code` → 调 `POST https://api.x.com/2/oauth2/token` 换取 `access_token`。
+  - **OAuth 1.0a 四元组**：先在 **User authentication settings** 将 **App permissions** 设为 `Read and write` 并保存 → 到 **Keys and tokens** 生成/复制 **Consumer Keys**（API Key & Secret）与 **Access Token and Secret**（确认标注 `Created with Read and Write permissions`，若此前已生成过须点击 **Regenerate**）。
 - **支持字段**：`apiBaseUrl`（默认 `https://api.x.com`）、`bearerToken`、`apiKey`、`apiSecret`、`accessToken`、`accessTokenSecret`、`proxyHost`、`proxyPort`、`timeoutMs`。
 
 ### 4.2 Telegram
 - **认证方式 (`authMode`)**：
   - `BOT_TOKEN`：标准 Bot API 模式，自动拼接 `https://api.telegram.org/bot<botToken>/<method>`。
+- **如何获取**：在 Telegram 联系 `@BotFather` 发送 `/newbot` 获取 Bot Token；向机器人发消息后调用 `GET /updates` 从 `message.chat.id` 获取私聊或群组 Chat ID。
 - **支持字段**：`apiBaseUrl`（默认 `https://api.telegram.org`）、`botToken`、`defaultChatId`、`parseMode`（`MarkdownV2` / `HTML` / 空）、`proxyHost`、`proxyPort`、`timeoutMs`。
 
 ### 4.3 SSH 远程服务器
 - **认证方式 (`authMode`)**：
   - `PASSWORD`：`host`、`port`、`username`、`password`。
-  - `PRIVATE_KEY`：`host`、`port`、`username`、`privateKey`（PEM / OpenSSH 私钥文本）、可选 `passphrase`。
+  - `PRIVATE_KEY`：`host`、`port`、`username`、`privateKey`（PEM / OpenSSH 私钥文本，可通过 `ssh-keygen -t ed25519` 生成并将 `.pub` 部署到目标机 `~/.ssh/authorized_keys`）、可选 `passphrase`。
 - **安全与附加字段**：`timeoutMs`、`strictHostKeyChecking`（默认 `false`）、`allowedCommandPrefixes`（可选逗号分隔命令白名单前缀，例如 `ls,df,uname,docker ps`；留空则允许所有命令）。
 
 ---
