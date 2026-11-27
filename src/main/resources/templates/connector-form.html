@@ -163,6 +163,48 @@
                 </details>
             </div>
 
+            <!-- X Web Cookie (auth_token + ct0) -->
+            <div id="section-x-cookie" class="section-box hidden">
+                <h3 class="section-title">X (Twitter) 网页 Cookie 配置（普通用户免开发者账号）</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="authToken">auth_token *</label>
+                        <input id="authToken" type="text" class="form-control mono" th:field="*{config.authToken}" placeholder="从 x.com Cookie 中复制 auth_token">
+                    </div>
+                    <div class="form-group">
+                        <label for="ct0">ct0 (CSRF Token) *</label>
+                        <input id="ct0" type="text" class="form-control mono" th:field="*{config.ct0}" placeholder="从 x.com Cookie 中复制 ct0">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="graphqlQueryIds">自定义 GraphQL Query IDs（可选，留空使用内置默认值）</label>
+                    <input id="graphqlQueryIds" type="text" class="form-control mono" th:field="*{config.graphqlQueryIds}"
+                           placeholder="CreateTweet=...,SearchTimeline=...,UserByScreenName=...">
+                </div>
+
+                <details class="guide-box" th:attr="open=${!editing ? 'open' : null}">
+                    <summary class="guide-summary">📖 获取教程：普通用户如何从浏览器获取 X 的 auth_token 和 ct0</summary>
+                    <div class="guide-body">
+                        <ol class="guide-steps">
+                            <li>在桌面浏览器（Chrome / Edge / Arc 等）打开并登录 <a href="https://x.com" target="_blank" rel="noopener noreferrer">https://x.com</a>（无需申请开发者账号）。</li>
+                            <li>按 <span class="inline-code">F12</span>（macOS 按 <span class="inline-code">Cmd + Option + I</span>）打开开发者工具，切换到顶部 <strong>Application（应用）</strong> 标签页。</li>
+                            <li>在左侧菜单依次展开 <strong>Storage → Cookies → https://x.com</strong>。</li>
+                            <li>在右侧列表中找到名称为 <span class="inline-code">auth_token</span> 的一行，双击并复制其 <strong>Value</strong> → 填入上方 <span class="inline-code">auth_token</span>。</li>
+                            <li>继续找到名称为 <span class="inline-code">ct0</span> 的一行，双击并复制其 <strong>Value</strong> → 填入上方 <span class="inline-code">ct0</span>（中转站会自动同步写入 Cookie 与 <span class="inline-code">x-csrf-token</span> 请求头）。</li>
+                            <li>保存后在控制台点击 <strong>测试</strong>（验证 <span class="inline-code">GET /i/api/1.1/account/settings.json</span> 返回 200 即表示登录态有效）。</li>
+                        </ol>
+                        <div class="guide-note">
+                            <strong>注意事项：</strong>
+                            <br>• 网页 Cookie 属于 X 内部非官方会话接口，请控制调用频率避免触发风控；若在浏览器点击<strong>退出登录</strong>或修改密码，旧 <span class="inline-code">auth_token</span> 会立即失效，需重新复制。
+                            <br>• 若 X 更新前端导致发推/搜索等 GraphQL 接口报 404，可在浏览器 <strong>Network（网络）</strong> 面板查看对应请求 URL <span class="inline-code">/i/api/graphql/&lt;queryId&gt;/CreateTweet</span>，把最新 ID 填入上方“自定义 GraphQL Query IDs”即可热更新，无需改代码。
+                        </div>
+                        <div class="guide-tip">
+                            <strong>默认端点：</strong>该模式下“自定义 API Base URL”留空默认请求 <span class="inline-code">https://x.com</span>；在通用转发接口 <span class="inline-code">POST /api/relay/x/{profileId}/request</span> 中可直接透传任意 <span class="inline-code">/i/api/...</span> 路径。
+                        </div>
+                    </div>
+                </details>
+            </div>
+
             <!-- Telegram -->
             <div id="section-telegram" class="section-box hidden">
                 <h3 class="section-title">Telegram Bot API 配置</h3>
@@ -315,6 +357,7 @@ function syncFormFields() {
 
     toggle('section-x-bearer', type === 'X' && mode === 'BEARER_TOKEN');
     toggle('section-x-oauth1a', type === 'X' && mode === 'OAUTH1A');
+    toggle('section-x-cookie', type === 'X' && mode === 'COOKIE_AUTH');
     toggle('section-telegram', type === 'TELEGRAM');
     toggle('section-ssh', type === 'SSH');
     toggle('section-ssh-password', type === 'SSH' && mode === 'PASSWORD');
@@ -323,6 +366,17 @@ function syncFormFields() {
     toggle('httpBaseUrlWrap', type !== 'SSH');
     toggle('proxyHostWrap', type !== 'SSH');
     toggle('proxyPortWrap', type !== 'SSH');
+
+    const baseUrlInput = document.getElementById('apiBaseUrl');
+    if (baseUrlInput) {
+        if (type === 'X' && mode === 'COOKIE_AUTH') {
+            baseUrlInput.placeholder = 'https://x.com 或反代地址';
+        } else if (type === 'TELEGRAM') {
+            baseUrlInput.placeholder = 'https://api.telegram.org 或反代地址';
+        } else {
+            baseUrlInput.placeholder = 'https://api.x.com 或反代地址';
+        }
+    }
 }
 
 function toggle(id, show) {

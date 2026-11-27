@@ -3,6 +3,7 @@ package com.muse.connect.model;
 public enum AuthMode {
     BEARER_TOKEN(ConnectorType.X, "Bearer / OAuth2 Token"),
     OAUTH1A(ConnectorType.X, "OAuth 1.0a (HMAC-SHA1)"),
+    COOKIE_AUTH(ConnectorType.X, "Web Cookie (auth_token + ct0)"),
     BOT_TOKEN(ConnectorType.TELEGRAM, "Bot API Token"),
     PASSWORD(ConnectorType.SSH, "SSH Password"),
     PRIVATE_KEY(ConnectorType.SSH, "SSH Private Key");

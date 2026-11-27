@@ -21,6 +21,9 @@ public class ConnectorConfig {
     private String apiSecret;
     private String accessToken;
     private String accessTokenSecret;
+    private String authToken;
+    private String ct0;
+    private String graphqlQueryIds;
 
     // Telegram fields
     private String botToken;
@@ -48,6 +51,9 @@ public class ConnectorConfig {
         copy.apiSecret = maskIfPresent(this.apiSecret);
         copy.accessToken = maskIfPresent(this.accessToken);
         copy.accessTokenSecret = maskIfPresent(this.accessTokenSecret);
+        copy.authToken = maskIfPresent(this.authToken);
+        copy.ct0 = maskIfPresent(this.ct0);
+        copy.graphqlQueryIds = this.graphqlQueryIds;
         copy.botToken = maskIfPresent(this.botToken);
         copy.defaultChatId = this.defaultChatId;
         copy.parseMode = this.parseMode;
@@ -70,6 +76,8 @@ public class ConnectorConfig {
         this.apiSecret = pickSecret(this.apiSecret, existing.apiSecret);
         this.accessToken = pickSecret(this.accessToken, existing.accessToken);
         this.accessTokenSecret = pickSecret(this.accessTokenSecret, existing.accessTokenSecret);
+        this.authToken = pickSecret(this.authToken, existing.authToken);
+        this.ct0 = pickSecret(this.ct0, existing.ct0);
         this.botToken = pickSecret(this.botToken, existing.botToken);
         this.password = pickSecret(this.password, existing.password);
         this.privateKey = pickSecret(this.privateKey, existing.privateKey);
@@ -157,6 +165,30 @@ public class ConnectorConfig {
 
     public void setAccessTokenSecret(String accessTokenSecret) {
         this.accessTokenSecret = trimToNull(accessTokenSecret);
+    }
+
+    public String getAuthToken() {
+        return authToken;
+    }
+
+    public void setAuthToken(String authToken) {
+        this.authToken = trimToNull(authToken);
+    }
+
+    public String getCt0() {
+        return ct0;
+    }
+
+    public void setCt0(String ct0) {
+        this.ct0 = trimToNull(ct0);
+    }
+
+    public String getGraphqlQueryIds() {
+        return graphqlQueryIds;
+    }
+
+    public void setGraphqlQueryIds(String graphqlQueryIds) {
+        this.graphqlQueryIds = trimToNull(graphqlQueryIds);
     }
 
     public String getBotToken() {

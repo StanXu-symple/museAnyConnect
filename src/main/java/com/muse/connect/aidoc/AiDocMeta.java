@@ -18,10 +18,10 @@ public enum AiDocMeta {
     // 1. 接口分组定义（用于 @AiApiGroup）
     // =========================================================================
 
-    /** X (Twitter) 中转接口分组：转发 X API v2 请求，支持 Bearer/OAuth 2.0 与 OAuth 1.0a（自动 HMAC-SHA1 签名） */
+    /** X (Twitter) 中转接口分组：转发 X API 请求，支持 Bearer/OAuth 2.0、OAuth 1.0a 自动签名及普通用户 Web Cookie (auth_token + ct0) */
     GROUP_X_RELAY(
             "X (Twitter) Relay",
-            "Forward X API v2 requests using configured Bearer/OAuth 2.0 or OAuth 1.0a (auto HMAC-SHA1) profiles.",
+            "Forward X requests using configured Bearer/OAuth 2.0, OAuth 1.0a (auto HMAC-SHA1), or Web Cookie (auth_token + ct0) profiles.",
             ConnectorType.X,
             10
     ),
@@ -54,10 +54,10 @@ public enum AiDocMeta {
     // 2. 接口端点定义（用于 @AiEndpoint）
     // =========================================================================
 
-    /** X 快捷发推或回复接口：需使用具备写权限的 OAuth 1.0a 连接器或含 tweet.write 权限的 OAuth 2.0 User Token */
+    /** X 快捷发推或回复接口：支持 OAuth 1.0a、具备写权限的 OAuth 2.0 User Token 或 Web Cookie (auth_token + ct0) */
     EP_X_POST_TWEET(
             "Post a new tweet (or reply)",
-            "Requires an OAUTH1A profile with Read and Write permissions or an OAuth 2.0 User Access Token with tweet.write scope.",
+            "Requires an OAUTH1A profile with Read and Write permissions, an OAuth 2.0 User Access Token with tweet.write scope, or a COOKIE_AUTH (auth_token + ct0) profile.",
             10
     ),
 
@@ -162,8 +162,8 @@ public enum AiDocMeta {
     /** X 通用转发请求的 HTTP 方法（如 GET、POST、DELETE），必填 */
     FIELD_X_METHOD("HTTP method (GET, POST, DELETE, etc.)", true, "GET"),
 
-    /** X API v2 接口路径（需以 /2/ 开头），必填 */
-    FIELD_X_PATH("X API v2 path starting with /2/", true, "/2/users/me"),
+    /** X API 路径（API v2 以 /2/ 开头，Web Cookie 模式以 /i/api/ 开头），必填 */
+    FIELD_X_PATH("X API path (e.g. /2/users/me for OAuth/Bearer, or /i/api/... for COOKIE_AUTH)", true, "/2/users/me"),
 
     /** X 通用转发可选 URL 查询参数表 */
     FIELD_X_QUERY_PARAMS("Optional URL query parameters", false, "{}"),

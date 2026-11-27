@@ -118,7 +118,7 @@
                         <span th:if="${c.type.name() == 'TELEGRAM'}"
                               th:text="${(c.config.apiBaseUrl != null ? c.config.apiBaseUrl : 'https://api.telegram.org') + (c.config.defaultChatId != null ? ' (chat: ' + c.config.defaultChatId + ')' : '')}"></span>
                         <span th:if="${c.type.name() == 'X'}"
-                              th:text="${c.config.apiBaseUrl != null ? c.config.apiBaseUrl : 'https://api.x.com'}"></span>
+                              th:text="${c.config.apiBaseUrl != null ? c.config.apiBaseUrl : (c.authMode.name() == 'COOKIE_AUTH' ? 'https://x.com' : 'https://api.x.com')}"></span>
                     </td>
                     <td>
                         <span th:if="${c.enabled}" class="badge badge-ok">已启用</span>

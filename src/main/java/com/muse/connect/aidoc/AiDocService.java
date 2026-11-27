@@ -281,6 +281,7 @@ public class AiDocService {
             return switch (profile.getAuthMode()) {
                 case OAUTH1A -> "read & write (HMAC-SHA1 signed)";
                 case BEARER_TOKEN -> "Bearer / OAuth 2.0 token";
+                case COOKIE_AUTH -> "web cookie session (auth_token + ct0, /i/api/**)";
                 default -> profile.getAuthMode().name();
             };
         }

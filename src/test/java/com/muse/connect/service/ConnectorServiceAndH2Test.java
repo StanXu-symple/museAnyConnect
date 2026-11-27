@@ -76,4 +76,45 @@ class ConnectorServiceAndH2Test {
         }
         assertThat(activityBuffer.size()).isEqualTo(cap);
     }
+
+    @Test
+    void validatesMasksAndRetainsXCookieAuthSecrets() {
+        ConnectorProfile missingCt0 = new ConnectorProfile();
+        missingCt0.setId("x-cookie-bad");
+        missingCt0.setName("Bad Cookie X");
+        missingCt0.setType(ConnectorType.X);
+        missingCt0.setAuthMode(AuthMode.COOKIE_AUTH);
+        ConnectorConfig badCfg = new ConnectorConfig();
+        badCfg.setAuthToken("tok-only");
+        missingCt0.setConfig(badCfg);
+
+        assertThatThrownBy(() -> connectorService.upsert(missingCt0))
+                .isInstanceOf(ConnectorException.class)
+                .hasMessageContaining("authToken and ct0");
+
+        ConnectorProfile cookieX = new ConnectorProfile();
+        cookieX.setId("x-cookie-unit");
+        cookieX.setName("Cookie X");
+        cookieX.setType(ConnectorType.X);
+        cookieX.setAuthMode(AuthMode.COOKIE_AUTH);
+        ConnectorConfig cfg = new ConnectorConfig();
+        cfg.setAuthToken("real-auth-token-123");
+        cfg.setCt0("real-ct0-csrf-456");
+        cfg.setGraphqlQueryIds("CreateTweet=abc123");
+        cookieX.setConfig(cfg);
+
+        ConnectorProfile saved = connectorService.upsert(cookieX);
+        assertThat(saved.getConfig().getAuthToken()).isEqualTo(ConnectorConfig.MASK);
+        assertThat(saved.getConfig().getCt0()).isEqualTo(ConnectorConfig.MASK);
+        assertThat(saved.getConfig().getGraphqlQueryIds()).isEqualTo("CreateTweet=abc123");
+
+        // Updating name with masked values keeps original authToken & ct0 intact
+        saved.setName("Cookie X Renamed");
+        connectorService.upsert(saved);
+        ConnectorProfile raw = connectorService.getRaw("x-cookie-unit");
+        assertThat(raw.getConfig().getAuthToken()).isEqualTo("real-auth-token-123");
+        assertThat(raw.getConfig().getCt0()).isEqualTo("real-ct0-csrf-456");
+
+        connectorService.delete("x-cookie-unit");
+    }
 }

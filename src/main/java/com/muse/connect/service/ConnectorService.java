@@ -163,6 +163,12 @@ public class ConnectorService {
                 )) {
                     throw new ConnectorException(HttpStatus.BAD_REQUEST, "apiKey, apiSecret, accessToken and accessTokenSecret are required for X OAUTH1A");
                 }
+                if (authMode == AuthMode.COOKIE_AUTH && (
+                        !StringUtils.hasText(cfg.getAuthToken())
+                                || !StringUtils.hasText(cfg.getCt0())
+                )) {
+                    throw new ConnectorException(HttpStatus.BAD_REQUEST, "authToken and ct0 are required for X COOKIE_AUTH");
+                }
             }
             case TELEGRAM -> {
                 if (!StringUtils.hasText(cfg.getBotToken())) {

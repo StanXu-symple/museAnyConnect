@@ -167,11 +167,13 @@ docker run -d --name muse-any-connect -p 8080:8080 muse-any-connect:local
 - **认证方式 (`authMode`)**：
   - `BEARER_TOKEN`：使用 Bearer Token 调用 X API v2（App-Only Bearer Token 仅读公开数据；OAuth 2.0 User Access Token 支持读写，默认 2 小时过期）。
   - `OAUTH1A`：配置 `apiKey`、`apiSecret`、`accessToken`、`accessTokenSecret`，中转站自动生成 HMAC-SHA1 `Authorization: OAuth ...` 请求头（**推荐长期自动发推**，凭证不会自动过期）。
+  - `COOKIE_AUTH`：普通用户免开发者账号模式，配置浏览器 Cookie 中的 `authToken`（`auth_token`）与 `ct0`，中转站自动注入 `Cookie`、`x-csrf-token`、Web Bearer Token 等请求头并转发至 `https://x.com/i/api/**`（支持发推、搜索、查用户、连通性测试及通用 `/i/api/...` 透传，并支持 `graphqlQueryIds` 热覆盖 GraphQL Query ID）。
 - **如何获取**：
   - **App-Only Bearer Token**：登录 `developer.x.com/en/portal/dashboard` → 打开 App → **Keys and tokens** → **Bearer Token** → **Generate**。
   - **OAuth 2.0 User Access Token (PKCE)**：在 **Settings → User authentication settings** 开启 `Read and write` 与 Callback URI → 记录 `Client ID` → 通过 `https://x.com/i/oauth2/authorize` 授权拿 `code` → 调 `POST https://api.x.com/2/oauth2/token` 换取 `access_token`。
   - **OAuth 1.0a 四元组**：先在 **User authentication settings** 将 **App permissions** 设为 `Read and write` 并保存 → 到 **Keys and tokens** 生成/复制 **Consumer Keys**（API Key & Secret）与 **Access Token and Secret**（确认标注 `Created with Read and Write permissions`，若此前已生成过须点击 **Regenerate**）。
-- **支持字段**：`apiBaseUrl`（默认 `https://api.x.com`）、`bearerToken`、`apiKey`、`apiSecret`、`accessToken`、`accessTokenSecret`、`proxyHost`、`proxyPort`、`timeoutMs`。
+  - **Web Cookie (`auth_token` + `ct0`)**：浏览器登录 `https://x.com` → 按 `F12` 打开开发者工具 → **Application → Storage → Cookies → https://x.com** → 分别复制 `auth_token` 与 `ct0` 的 Value 填入即可。
+- **支持字段**：`apiBaseUrl`（OAuth/Bearer 默认 `https://api.x.com`，`COOKIE_AUTH` 默认 `https://x.com`）、`bearerToken`、`apiKey`、`apiSecret`、`accessToken`、`accessTokenSecret`、`authToken`、`ct0`、`graphqlQueryIds`、`proxyHost`、`proxyPort`、`timeoutMs`。
 
 ### 4.2 Telegram
 - **认证方式 (`authMode`)**：

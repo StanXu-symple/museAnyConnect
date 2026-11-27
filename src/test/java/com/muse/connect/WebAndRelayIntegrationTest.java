@@ -47,6 +47,9 @@ class WebAndRelayIntegrationTest {
     private static HttpServer mockUpstream;
     private static String mockBaseUrl;
     private static final AtomicReference<String> lastAuthHeader = new AtomicReference<>();
+    private static final AtomicReference<String> lastCookieHeader = new AtomicReference<>();
+    private static final AtomicReference<String> lastCsrfHeader = new AtomicReference<>();
+    private static final AtomicReference<String> lastAuthTypeHeader = new AtomicReference<>();
 
     @Autowired
     private MockMvc mockMvc;
@@ -68,6 +71,40 @@ class WebAndRelayIntegrationTest {
         });
         mockUpstream.createContext("/bot123:test/sendMessage", exchange -> {
             byte[] resp = "{\"ok\":true,\"result\":{\"message_id\":77}}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, resp.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(resp);
+            }
+        });
+        mockUpstream.createContext("/i/api/1.1/account/settings.json", exchange -> {
+            lastAuthHeader.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            lastCookieHeader.set(exchange.getRequestHeaders().getFirst("Cookie"));
+            lastCsrfHeader.set(exchange.getRequestHeaders().getFirst("x-csrf-token"));
+            lastAuthTypeHeader.set(exchange.getRequestHeaders().getFirst("x-twitter-auth-type"));
+            byte[] resp = "{\"screen_name\":\"normal_user\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, resp.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(resp);
+            }
+        });
+        mockUpstream.createContext("/i/api/graphql/customCreateId/CreateTweet", exchange -> {
+            lastAuthHeader.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            lastCookieHeader.set(exchange.getRequestHeaders().getFirst("Cookie"));
+            lastCsrfHeader.set(exchange.getRequestHeaders().getFirst("x-csrf-token"));
+            lastAuthTypeHeader.set(exchange.getRequestHeaders().getFirst("x-twitter-auth-type"));
+            byte[] resp = "{\"data\":{\"create_tweet\":{\"tweet_results\":{\"result\":{\"rest_id\":\"98765\"}}}}}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, resp.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(resp);
+            }
+        });
+        mockUpstream.createContext("/i/api/graphql/customUserId/UserByScreenName", exchange -> {
+            lastCookieHeader.set(exchange.getRequestHeaders().getFirst("Cookie"));
+            lastCsrfHeader.set(exchange.getRequestHeaders().getFirst("x-csrf-token"));
+            byte[] resp = "{\"data\":{\"user\":{\"result\":{\"legacy\":{\"screen_name\":\"jack\"}}}}}".getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, resp.length);
             try (OutputStream os = exchange.getResponseBody()) {
@@ -176,7 +213,8 @@ class WebAndRelayIntegrationTest {
         mockMvc.perform(get("/connectors/new").param("type", "X").cookie(sessionCookie))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("如何拿到 X 的 Bearer Token / OAuth 2.0 Token")))
-                .andExpect(content().string(containsString("如何拿到 X 的 OAuth 1.0a 四个密钥")));
+                .andExpect(content().string(containsString("如何拿到 X 的 OAuth 1.0a 四个密钥")))
+                .andExpect(content().string(containsString("普通用户如何从浏览器获取 X 的 auth_token 和 ct0")));
 
         mockMvc.perform(get("/connectors/new").param("type", "SSH").cookie(sessionCookie))
                 .andExpect(status().isOk())
@@ -203,10 +241,57 @@ class WebAndRelayIntegrationTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/"));
 
+        // 7. X COOKIE_AUTH (auth_token + ct0) profile creation, test, tweet, and user lookup
+        ConnectorProfile cookieProfile = new ConnectorProfile();
+        cookieProfile.setId("x-cookie-mock");
+        cookieProfile.setName("Cookie X");
+        cookieProfile.setType(ConnectorType.X);
+        cookieProfile.setAuthMode(AuthMode.COOKIE_AUTH);
+        ConnectorConfig cookieCfg = new ConnectorConfig();
+        cookieCfg.setApiBaseUrl(mockBaseUrl);
+        cookieCfg.setAuthToken("my-auth-token");
+        cookieCfg.setCt0("my-ct0-value");
+        cookieCfg.setGraphqlQueryIds("CreateTweet=customCreateId,UserByScreenName=customUserId");
+        cookieProfile.setConfig(cookieCfg);
+
+        mockMvc.perform(post("/api/connectors")
+                        .header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(cookieProfile)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.config.authToken").value("****"))
+                .andExpect(jsonPath("$.config.ct0").value("****"));
+
+        mockMvc.perform(post("/api/connectors/x-cookie-mock/test")
+                        .header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.screen_name").value("normal_user"));
+
+        assertThat(lastCookieHeader.get()).isEqualTo("auth_token=my-auth-token; ct0=my-ct0-value");
+        assertThat(lastCsrfHeader.get()).isEqualTo("my-ct0-value");
+        assertThat(lastAuthTypeHeader.get()).isEqualTo("OAuth2Session");
+        assertThat(lastAuthHeader.get()).startsWith("Bearer ");
+
+        mockMvc.perform(post("/api/relay/x/x-cookie-mock/tweet")
+                        .header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"Cookie tweet\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.data.create_tweet.tweet_results.result.rest_id").value("98765"));
+
+        mockMvc.perform(get("/api/relay/x/x-cookie-mock/users/by/username/jack")
+                        .header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.data.user.result.legacy.screen_name").value("jack"));
+
         // Cleanup
         mockMvc.perform(delete("/api/connectors/x-mock").header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)).andExpect(status().isOk());
         mockMvc.perform(delete("/api/connectors/tg-mock").header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)).andExpect(status().isOk());
         mockMvc.perform(delete("/api/connectors/ssh-ui-test").header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)).andExpect(status().isOk());
+        mockMvc.perform(delete("/api/connectors/x-cookie-mock").header(RelayAuthFilter.HEADER_NAME, AppProperties.DEFAULT_API_KEY)).andExpect(status().isOk());
     }
 
     private String extractCookieValue(String setCookieHeader, String name) {
