@@ -302,8 +302,8 @@
                     <summary class="guide-summary">📖 获取教程：如何配置个人账号 MTProto（gotd/td 侧车）</summary>
                     <div class="guide-body">
                         <ol class="guide-steps">
-                            <li>登录官方开发页 <a href="https://my.telegram.org/apps" target="_blank" rel="noopener noreferrer">my.telegram.org/apps</a>，创建一个应用后获取 <span class="inline-code">App api_id</span> 与 <span class="inline-code">App api_hash</span>。</li>
-                            <li>确认 <span class="inline-code">tg-user-bridge</span>（基于 Go <span class="inline-code">gotd/td</span> 的轻量侧车容器）已启动；使用 <span class="inline-code">docker compose up -d</span> 时默认已自动连通，无需手填下方 Base URL。</li>
+                            <li>登录官方开发页 <a href="https://my.telegram.org/apps" target="_blank" rel="noopener noreferrer">my.telegram.org/apps</a>，创建一个应用后获取 <span class="inline-code">App api_id</span> 与 <span class="inline-code">App api_hash</span>。页面上的 <span class="inline-code">Production configuration</span>（如 <span class="inline-code">149.154.167.50:443</span>）与 <span class="inline-code">-----BEGIN RSA PUBLIC KEY-----</span> 已内置于 <span class="inline-code">gotd/td</span> 官方协议栈中，<strong>无需手工填写</strong>。</li>
+                            <li>确认 <span class="inline-code">tg-user-bridge</span>（基于 Go <span class="inline-code">gotd/td</span> 的轻量侧车）已运行：使用官方 Docker 镜像时<strong>已内置自动随容器启动</strong>，开箱即用无需额外部署；仅本机直接运行 Java（<span class="inline-code">mvn spring-boot:run</span>）时，需另开终端在 <span class="inline-code">tg-user-bridge</span> 目录执行 <span class="inline-code">go run .</span>（默认监听 <span class="inline-code">http://127.0.0.1:8081</span>）。</li>
                             <li>使用上方“在线登录个人账号”区域发送验证码并校验，成功后会自动填充 <span class="inline-code">tg_sess_v1:...</span> 会话字符串；保存配置后即可持久化存储在 SQLite 中，重启免重复验证码登录。</li>
                             <li>保存后可在 <strong>在线调试</strong> 中先调用 <span class="inline-code">GET /dialogs</span> 列出所有群组/频道的 <span class="inline-code">chatId</span>，再调用 <span class="inline-code">GET /history</span> 读群消息、<span class="inline-code">POST /send</span> 发/回复消息、<span class="inline-code">GET /search</span> 搜消息等全部能力。</li>
                         </ol>
@@ -384,7 +384,7 @@
                 <h3 class="section-title">通用网络与超时参数（可选）</h3>
                 <div class="form-grid">
                     <div id="httpBaseUrlWrap" class="form-group">
-                        <label for="apiBaseUrl">自定义 API Base URL（留空使用官方默认）</label>
+                        <label id="apiBaseUrlLabel" for="apiBaseUrl">自定义 API Base URL（留空使用官方默认）</label>
                         <input id="apiBaseUrl" type="text" class="form-control mono" th:field="*{config.apiBaseUrl}" placeholder="https://api.x.com 或反代地址">
                     </div>
                     <div class="form-group">
@@ -446,14 +446,19 @@ function syncFormFields() {
     toggle('proxyPortWrap', type !== 'SSH');
 
     const baseUrlInput = document.getElementById('apiBaseUrl');
+    const baseUrlLabel = document.getElementById('apiBaseUrlLabel');
     if (baseUrlInput) {
         if (type === 'X' && mode === 'COOKIE_AUTH') {
+            if (baseUrlLabel) baseUrlLabel.textContent = '自定义 API Base URL（留空使用官方默认）';
             baseUrlInput.placeholder = 'https://x.com 或反代地址';
         } else if (type === 'TELEGRAM' && mode === 'USER_SESSION') {
-            baseUrlInput.placeholder = '留空走默认 gotd/td 侧车地址（如 http://tg-user-bridge:8081）';
+            if (baseUrlLabel) baseUrlLabel.textContent = 'tg-user-bridge 侧车 HTTP 地址（留空走默认，勿填 Telegram DC IP）';
+            baseUrlInput.placeholder = '留空走默认 gotd/td 侧车地址（如 http://127.0.0.1:8081 或 http://tg-user-bridge:8081）';
         } else if (type === 'TELEGRAM') {
+            if (baseUrlLabel) baseUrlLabel.textContent = '自定义 API Base URL（留空使用官方默认）';
             baseUrlInput.placeholder = 'https://api.telegram.org 或反代地址';
         } else {
+            if (baseUrlLabel) baseUrlLabel.textContent = '自定义 API Base URL（留空使用官方默认）';
             baseUrlInput.placeholder = 'https://api.x.com 或反代地址';
         }
     }

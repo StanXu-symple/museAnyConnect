@@ -194,6 +194,15 @@ public final class ExceptionMessageConstants {
     public static final String TELEGRAM_AUTH_START_REQUIRED = "apiId, apiHash and phone are required";
     /** Telegram 交互登录校验参数缺失 */
     public static final String TELEGRAM_AUTH_VERIFY_REQUIRED = "loginId is required";
+    /** Telegram 侧车地址格式非法提示模板 */
+    public static final String TELEGRAM_BRIDGE_URL_INVALID_FMT =
+            "Telegram 侧车地址无效（%s）：请填写 tg-user-bridge 的 HTTP 地址（如 http://127.0.0.1:8081 或 http://tg-user-bridge:8081），无需填写 Telegram 官方 DC IP（如 149.154.167.50:443）";
+    /** Telegram 侧车服务不可达提示模板 */
+    public static final String TELEGRAM_BRIDGE_UNREACHABLE_FMT =
+            "无法连接 Telegram 侧车服务 tg-user-bridge（%s），请确认侧车已启动（docker compose up -d 或在 tg-user-bridge 目录执行 go run .）且 MUSE_TELEGRAM_BRIDGE_URL 配置正确";
+    /** Telegram 侧车服务请求超时提示模板 */
+    public static final String TELEGRAM_BRIDGE_TIMEOUT_FMT =
+            "连接 Telegram 侧车服务超时（%s）：%s";
 
     // =========================================================================
     // 6. SSH / SFTP 中转异常消息

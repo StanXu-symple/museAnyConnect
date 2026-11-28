@@ -57,6 +57,12 @@ public final class HttpConstants {
     public static final String PROXY_DIRECT_KEY = "DIRECT";
     /** 代理主机端口拼接分隔符 */
     public static final String COLON = ":";
+    /** 异常类型与详情拼接分隔符 */
+    public static final String COLON_SPACE = ": ";
+    /** HTTP 协议名 */
+    public static final String SCHEME_HTTP = "http";
+    /** HTTPS 协议名 */
+    public static final String SCHEME_HTTPS = "https";
     /** 默认本地服务地址 */
     public static final String DEFAULT_LOCAL_BASE_URL = "http://localhost:8080";
     /** 去除 URL 末尾多余斜杠的正则 */

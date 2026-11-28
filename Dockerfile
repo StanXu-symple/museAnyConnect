@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
-# 阶段 1：在宿主机架构上原生构建可执行 Fat Jar（纯 Java 字节码）
-FROM --platform=$BUILDPLATFORM maven:3.9-eclipse-temurin-17-noble AS builder
+# 阶段 1：在宿主机架构上原生构建 Java 可执行 Fat Jar（纯字节码，架构无关）
+FROM --platform=$BUILDPLATFORM maven:3.9-eclipse-temurin-17-noble AS java-builder
 
 WORKDIR /build
 
@@ -12,7 +12,23 @@ COPY src ./src
 RUN mvn -B clean package -DskipTests \
     && cp target/muse-any-connect-*.jar /build/app.jar
 
-# 阶段 2：极简 JRE 运行时镜像（支持多架构：linux/amd64 与 linux/arm64）
+# 阶段 2：在宿主机架构上交叉静态编译 Telegram 个人账号 MTProto (gotd/td) 侧车二进制
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS tg-bridge-builder
+
+WORKDIR /build
+
+RUN apk add --no-cache ca-certificates git
+
+COPY tg-user-bridge/go.mod ./
+COPY tg-user-bridge/*.go ./
+
+ARG TARGETOS=linux
+ARG TARGETARCH
+
+RUN go mod tidy \
+    && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /build/tg-user-bridge .
+
+# 阶段 3：单镜像一体化运行时（极简 JRE 17 + 内置 tg-user-bridge 静态二进制，支持 linux/amd64 与 linux/arm64）
 FROM eclipse-temurin:17-jre-noble
 
 WORKDIR /app
@@ -22,11 +38,16 @@ RUN groupadd --system --gid 10001 muse \
     && mkdir -p /data/sqlite /data/logs \
     && chown -R muse:muse /app /data
 
-COPY --from=builder --chown=muse:muse /build/app.jar /app/app.jar
+COPY --from=java-builder --chown=muse:muse /build/app.jar /app/app.jar
+COPY --from=tg-bridge-builder --chown=muse:muse /build/tg-user-bridge /app/tg-user-bridge
 COPY --chmod=755 docker-entrypoint.sh /app/docker-entrypoint.sh
 
 ENV SERVER_PORT=8080 \
     MUSE_DATA_DIR=/data \
+    MUSE_EMBEDDED_TG_BRIDGE=true \
+    TG_BRIDGE_HOST=127.0.0.1 \
+    TG_BRIDGE_PORT=8081 \
+    MUSE_TELEGRAM_BRIDGE_URL=http://127.0.0.1:8081 \
     JAVA_OPTS="-Xms32m -Xmx128m"
 
 EXPOSE 8080

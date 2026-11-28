@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -278,5 +279,32 @@ class TelegramUserRelayIntegrationTest {
         mockMvc.perform(delete("/api/connectors/tg-user-mock")
                         .header(RelayAuthFilter.HEADER_NAME, API_KEY))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void returnsActionableErrorWhenBridgeUnreachableOrDcIpEntered() throws Exception {
+        // 1. 误将 Telegram 官方 DC IP 填入侧车地址时应返回 400 明确提示
+        mockMvc.perform(post("/api/connectors/telegram/auth/start")
+                        .header(RelayAuthFilter.HEADER_NAME, API_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"apiId\":123456,\"apiHash\":\"hash-secret\",\"phone\":\"+8613800138000\",\"bridgeUrl\":\"149.154.167.50:443\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error", containsString("tg-user-bridge")))
+                .andExpect(jsonPath("$.error", containsString("149.154.167.50:443")));
+
+        // 2. 侧车未启动导致连接被拒绝时，不得返回模糊的 "Telegram relay failed: null"
+        int closedPort;
+        try (ServerSocket socket = new ServerSocket(0)) {
+            closedPort = socket.getLocalPort();
+        }
+        String closedBridgeUrl = "http://127.0.0.1:" + closedPort;
+
+        mockMvc.perform(post("/api/connectors/telegram/auth/start")
+                        .header(RelayAuthFilter.HEADER_NAME, API_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"apiId\":123456,\"apiHash\":\"hash-secret\",\"phone\":\"+8613800138000\",\"bridgeUrl\":\"" + closedBridgeUrl + "\"}"))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.error", containsString("无法连接 Telegram 侧车服务")))
+                .andExpect(jsonPath("$.error", containsString(closedBridgeUrl)));
     }
 }

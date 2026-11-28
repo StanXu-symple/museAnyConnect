@@ -32,6 +32,10 @@ museAnyConnect/
 ├── docker-compose.yml               # 基于 GHCR 镜像的 Docker Compose 部署模板
 ├── README.md                        # 全局项目文档（本文件）
 ├── pom.xml                          # Maven 构建配置
+├── tg-user-bridge/                  # Telegram 个人账号 MTProto (gotd/td) Go 轻量侧车服务
+│   ├── Dockerfile                   # 多架构极简 Alpine 侧车镜像（约 15~20MB）
+│   ├── go.mod                       # Go 模块定义
+│   ├── main.go / manager.go / ...   # HTTP 桥接服务、Session 池与交互登录逻辑
 └── src/
     ├── main/
     │   ├── java/com/muse/connect/
@@ -80,6 +84,7 @@ museAnyConnect/
 ### 环境要求
 - JDK 17+
 - Maven 3.8+
+- Go 1.25+（可选，仅本机源码运行 `tg-user-bridge` 侧车时需要；使用 Docker Compose 部署时无需本机安装）
 
 ### 启动命令
 
@@ -117,8 +122,9 @@ java -Xms32m -Xmx128m -jar target/muse-any-connect-0.1.0-SNAPSHOT.jar
 | `muse.auth.lockout-minutes` | `MUSE_AUTH_LOCKOUT_MINUTES` | `15` | 触发防爆破锁定后的冷却时间（分钟） |
 | `muse.auth.allow-raw-export` | `MUSE_ALLOW_RAW_EXPORT` | `true` | 是否允许导出含明文凭据的连接器 JSON（生产可设为 `false` 禁用） |
 | `muse.relay.api-key` | `MUSE_RELAY_API_KEY` | `123456789`（兜底默认值） | 机器调用 `/api/**` 请求头 `X-Muse-Key` 校验密钥（未配置或留空时兜底为 `123456789`） |
-| `muse.relay.telegram-bridge-url` | `MUSE_TELEGRAM_BRIDGE_URL` | `http://127.0.0.1:8081` | Telegram 个人账号 `gotd/td` 侧车服务默认地址（Compose 默认 `http://tg-user-bridge:8081`） |
-| `muse.relay.telegram-bridge-token` | `MUSE_TELEGRAM_BRIDGE_TOKEN` | `""` | 可选：调用侧车时附带的 `X-Bridge-Token` 共享鉴权密钥 |
+| `muse.relay.telegram-bridge-url` | `MUSE_TELEGRAM_BRIDGE_URL` | `http://127.0.0.1:8081` | Telegram 个人账号 `gotd/td` 侧车服务默认地址（Docker 镜像已内置自动拉起，监听回环 `127.0.0.1:8081`） |
+| `muse.relay.telegram-bridge-token` | `MUSE_TELEGRAM_BRIDGE_TOKEN` | `""` | 可选：调用侧车时附带的 `X-Bridge-Token` 共享鉴权密钥（容器内置侧车会自动同步该值） |
+| — | `MUSE_EMBEDDED_TG_BRIDGE` | `true`（仅 Docker 镜像） | 是否在容器启动时自动拉起内置 `tg-user-bridge` 侧车；若对接外部独立侧车可设为 `false` |
 | `muse.relay.default-timeout-ms` | `MUSE_DEFAULT_TIMEOUT_MS` | `15000` | 外部请求默认超时（毫秒） |
 | `muse.relay.activity-buffer-size` | `MUSE_ACTIVITY_BUFFER_SIZE` | `100` | JVM 环形日志最大条数 |
 
@@ -129,15 +135,16 @@ java -Xms32m -Xmx128m -jar target/muse-any-connect-0.1.0-SNAPSHOT.jar
   - 同时配置 `MUSE_RELAY_API_KEY` 时，外部机器/Muse 通过请求头 `X-Muse-Key` 访问 `/api/**`，管理员登录后可在浏览器 Playground 直接调试。
 - **纵深防护**：Cookie 强制 `HttpOnly` + `SameSite=Lax`（反代 HTTPS 下自动开启 `Secure`），所有 Web 变更表单与导出接口强制校验 CSRF Token，并内置按 IP 登录防爆破锁定与安全响应头；登录页可选勾选“保存账号信息”使用当前浏览器 `localStorage` 本地缓存并支持一键清除。
 
-### Docker 与 GitHub Actions (GHCR) 自动构建部署
+### Docker 与 GitHub Actions (GHCR) 自动构建部署（单镜像开箱即用）
 
 每次推送代码到 `main` 分支（或推送 `v*.*.*` 标签）时，GitHub Actions（`.github/workflows/docker-publish.yml`）会自动：
-1. 执行 `mvn test` 验证全部单元测试与集成测试；
-2. 构建多架构镜像（`linux/amd64` + `linux/arm64`）并推送至 GitHub Container Registry（GHCR）：
+1. 执行 `mvn test` 与 `tg-user-bridge` 的 `go test ./...` 验证全部单元测试与集成测试；
+2. 多阶段编译 **Java 主服务 + Go `tg-user-bridge` 静态二进制**，打包推送为**一体化多架构镜像**（`linux/amd64` + `linux/arm64`）：
    - 镜像地址：`ghcr.io/stanxu-symple/museanyconnect:latest`
    - 同时生成 `main`、`sha-<commit>` 以及语义化版本标签。
+   - 容器启动时由 `docker-entrypoint.sh` 自动以后台非 root 进程拉起内置 `tg-user-bridge`（仅监听容器内回环 `127.0.0.1:8081`，不对外暴露），**单条 `docker run` 即可直接支持 Telegram 个人账号 MTProto 登录与全能力**。
 
-#### 直接拉取并运行
+#### 方式一：单条 `docker run` 直接拉取运行（推荐）
 
 ```bash
 docker pull ghcr.io/stanxu-symple/museanyconnect:latest
@@ -145,7 +152,7 @@ docker pull ghcr.io/stanxu-symple/museanyconnect:latest
 docker run -d \
   --name muse-any-connect \
   -p 8080:8080 \
-  -v ~/mseAnyConnect/data:/data \
+  -v ~/museAnyConnect/data:/data \
   -e MUSE_ADMIN_USERNAME="admin" \
   -e MUSE_ADMIN_PASSWORD="change-me-strong-password" \
   -e MUSE_RELAY_API_KEY="your-secret-key" \
@@ -157,23 +164,73 @@ docker run -d \
 - `./data/sqlite/muse-connect.db`（连接器配置持久化，容器升级/重启后自动保留）
 - `./data/logs/muse-any-connect.log`（滚动运行日志）
 
-> **自动权限适配**：容器入口脚本会在启动时自动创建 `/data/sqlite` 与 `/data/logs` 并修正挂载目录属主为非 root 用户 `muse`（UID `10001`），随后自动降权启动 Java 进程，Linux 宿主机直接挂载本地目录也无需手动 `chown`。
+> **自动权限适配**：容器入口脚本会在启动时自动创建 `/data/sqlite` 与 `/data/logs` 并修正挂载目录属主为非 root 用户 `muse`（UID `10001`），随后自动降权以 `muse` 身份同时启动内置 `tg-user-bridge` 与 Java 主进程，Linux 宿主机直接挂载本地目录也无需手动 `chown`。
 
-或使用项目自带的 `docker-compose.yml`（已默认映射 `${MUSE_HOST_DATA_DIR:-./data}:/data`）：
+#### 方式二：Docker Compose 部署
+
+项目自带的 `docker-compose.yml` 已配置单容器一体化镜像与 `${MUSE_HOST_DATA_DIR:-./data}:/data` 数据卷挂载：
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
+如需自定义管理员密码或 API Key，可在同目录创建 `.env` 文件后执行 `docker compose up -d`：
+
+```env
+MUSE_ADMIN_USERNAME=admin
+MUSE_ADMIN_PASSWORD=change-me-strong-password
+MUSE_RELAY_API_KEY=your-secret-key
+```
+
 > **提示（首次拉取权限）**：GHCR 首次由 Actions 推送生成的包默认可能是私有状态。如需免登录直接 `docker pull`，请打开 GitHub 仓库右侧 **Packages** → 点击 `museanyconnect` → **Package settings** → **Change visibility** 设为 **Public**；若保持私有，需先用带 `read:packages` 权限的 PAT 执行 `echo "<PAT>" | docker login ghcr.io -u StanXu-symple --password-stdin`。
+
+---
+
+### Telegram 个人账号侧车 (`tg-user-bridge`) 运行与排障说明
+
+- **Docker 部署**：官方镜像已内置 `tg-user-bridge` 二进制并在容器内自动启动（默认监听 `127.0.0.1:8081`），**无需额外部署第二个容器**。如需关闭内置侧车并改为连接外部独立实例，可设置 `-e MUSE_EMBEDDED_TG_BRIDGE=false -e MUSE_TELEGRAM_BRIDGE_URL=http://<外部地址>:8081`。
+- **本机源码开发模式（需 Go 1.25+）**：若本机直接运行 `mvn spring-boot:run`，需另开一个终端启动侧车：
+
+```bash
+cd tg-user-bridge
+go mod tidy
+# 默认监听 :8081（无鉴权令牌，适合本机调试）
+go run .
+
+# 如需指定监听地址、端口或鉴权令牌：
+# TG_BRIDGE_HOST=127.0.0.1 TG_BRIDGE_PORT=8081 TG_BRIDGE_TOKEN=local-dev-token go run .
+```
+
+验证侧车健康状态：
+
+```bash
+curl -s http://127.0.0.1:8081/health
+# 预期返回：{"ok":true,"status":"UP"}
+```
 
 #### 本地自行构建镜像
 
 ```bash
+# 构建一体化镜像（自动编译 Java 主服务 + 内置 tg-user-bridge 侧车）
 docker build -t muse-any-connect:local .
-docker run -d --name muse-any-connect -p 8080:8080 muse-any-connect:local
+docker run -d --name muse-any-connect -p 8080:8080 -v ./data:/data muse-any-connect:local
+
+# 如需单独构建独立侧车镜像：
+# docker build -t muse-tg-user-bridge:local ./tg-user-bridge
 ```
+
+#### 常见配置注意点
+
+| 侧车环境变量 | 默认值 | 说明 |
+| :--- | :--- | :--- |
+| `TG_BRIDGE_HOST` | 空（Docker 内置默认 `127.0.0.1`） | 侧车监听网卡地址 |
+| `TG_BRIDGE_PORT` | `8081` | 侧车 HTTP 监听端口 |
+| `TG_BRIDGE_TOKEN` | `""`（空表示不校验） | 内部共享鉴权密钥；容器内置模式会自动与 `MUSE_TELEGRAM_BRIDGE_TOKEN` 同步 |
+
+- **无需填写 Telegram 官方 DC IP 与 RSA 公钥**：`https://my.telegram.org/apps` 页面展示的 `Production configuration`（如 `149.154.167.50:443`）与 `-----BEGIN RSA PUBLIC KEY-----` 均已内置在 `gotd/td` 官方协议栈中，连接器表单仅需填写 `App api_id` 与 `App api_hash`，**切勿将 `149.154.167.50:443` 填入表单的侧车 HTTP 地址栏**。
+- **网络代理配置**：如果容器/主机无法直连 Telegram MTProto 服务器，请在连接器表单的“代理主机 / 代理端口”中填写 HTTP CONNECT 代理（如 `127.0.0.1` + `7890`）或 SOCKS5 代理（如 `socks5://127.0.0.1` + `1080`）；在 Docker 内访问宿主机代理时，可将代理主机填为 `host.docker.internal`（Linux 需在容器参数中增加 `--add-host=host.docker.internal:host-gateway`）。
+- **无状态极简设计**：侧车本身不落地数据库或文件，仅将活跃 MTProto 长连接缓存在内存中；登录生成的 `tg_sess_v1:...` 会话字符串统一保存在主服务的 SQLite 中，重启容器不会丢失登录态。
 
 ---
 

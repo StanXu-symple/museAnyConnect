@@ -124,17 +124,19 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 }
 
 func main() {
+	host := strings.TrimSpace(os.Getenv("TG_BRIDGE_HOST"))
 	port := strings.TrimSpace(os.Getenv("TG_BRIDGE_PORT"))
 	if port == "" {
 		port = "8081"
 	}
+	addr := host + ":" + port
 	token := strings.TrimSpace(os.Getenv("TG_BRIDGE_TOKEN"))
 
 	bridge := NewBridgeServer(token)
 	defer bridge.Close()
 
 	srv := &http.Server{
-		Addr:              ":" + port,
+		Addr:              addr,
 		Handler:           bridge.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
@@ -146,7 +148,7 @@ func main() {
 	defer stop()
 
 	go func() {
-		log.Printf("Muse Telegram 个人账号桥接服务 (gotd/td) 已启动，监听端口 :%s（鉴权令牌启用=%v）", port, token != "")
+		log.Printf("Muse Telegram 个人账号桥接服务 (gotd/td) 已启动，监听地址 %s（鉴权令牌启用=%v）", addr, token != "")
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("HTTP 服务异常退出: %v", err)
 		}

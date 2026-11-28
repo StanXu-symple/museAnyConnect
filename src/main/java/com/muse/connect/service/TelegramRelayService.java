@@ -18,10 +18,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.net.ConnectException;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
+import java.nio.channels.UnresolvedAddressException;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -413,7 +417,27 @@ public class TelegramRelayService {
 
     private String resolveBridgeUrl(String overrideUrl) {
         String raw = StringUtils.hasText(overrideUrl) ? overrideUrl.trim() : properties.getTelegramBridgeUrl();
-        return raw.replaceAll(HttpConstants.TRAILING_SLASH_REGEX, RouteConstants.EMPTY);
+        String normalized = raw.replaceAll(HttpConstants.TRAILING_SLASH_REGEX, RouteConstants.EMPTY);
+        try {
+            URI uri = URI.create(normalized);
+            String scheme = uri.getScheme();
+            boolean validScheme = HttpConstants.SCHEME_HTTP.equalsIgnoreCase(scheme)
+                    || HttpConstants.SCHEME_HTTPS.equalsIgnoreCase(scheme);
+            if (!validScheme || !StringUtils.hasText(uri.getHost())) {
+                throw new ConnectorException(
+                        HttpStatus.BAD_REQUEST,
+                        String.format(ExceptionMessageConstants.TELEGRAM_BRIDGE_URL_INVALID_FMT, raw)
+                );
+            }
+            return normalized;
+        } catch (ConnectorException ex) {
+            throw ex;
+        } catch (IllegalArgumentException ex) {
+            throw new ConnectorException(
+                    HttpStatus.BAD_REQUEST,
+                    String.format(ExceptionMessageConstants.TELEGRAM_BRIDGE_URL_INVALID_FMT, raw)
+            );
+        }
     }
 
     private String resolveBridgeToken(String overrideToken) {
@@ -477,9 +501,9 @@ public class TelegramRelayService {
                     : RelayResponse.fail(profile.getId(), ConnectorType.TELEGRAM, resp.statusCode(), durationMs, errMsg, parsed);
         } catch (Exception ex) {
             long durationMs = System.currentTimeMillis() - start;
-            activityBuffer.record(profile.getId(), ConnectorType.TELEGRAM, action, false, 502, durationMs, ex.getMessage());
-            return RelayResponse.fail(profile.getId(), ConnectorType.TELEGRAM, 502, durationMs,
-                    ExceptionMessageConstants.TELEGRAM_RELAY_FAILED_PREFIX + ex.getMessage(), null);
+            String errMsg = formatBridgeTransportError(baseUrl, ex);
+            activityBuffer.record(profile.getId(), ConnectorType.TELEGRAM, action, false, 502, durationMs, errMsg);
+            return RelayResponse.fail(profile.getId(), ConnectorType.TELEGRAM, 502, durationMs, errMsg, null);
         }
     }
 
@@ -511,8 +535,7 @@ public class TelegramRelayService {
         } catch (ConnectorException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new ConnectorException(HttpStatus.BAD_GATEWAY,
-                    ExceptionMessageConstants.TELEGRAM_RELAY_FAILED_PREFIX + ex.getMessage());
+            throw new ConnectorException(HttpStatus.BAD_GATEWAY, formatBridgeTransportError(baseUrl, ex));
         }
     }
 
@@ -562,10 +585,50 @@ public class TelegramRelayService {
                     ExceptionMessageConstants.TELEGRAM_API_ERROR, parsed);
         } catch (Exception ex) {
             long durationMs = System.currentTimeMillis() - start;
-            activityBuffer.record(profile.getId(), ConnectorType.TELEGRAM, method, false, 502, durationMs, ex.getMessage());
+            String detail = formatExceptionDetail(ex);
+            activityBuffer.record(profile.getId(), ConnectorType.TELEGRAM, method, false, 502, durationMs, detail);
             return RelayResponse.fail(profile.getId(), ConnectorType.TELEGRAM, 502, durationMs,
-                    ExceptionMessageConstants.TELEGRAM_RELAY_FAILED_PREFIX + ex.getMessage(), null);
+                    ExceptionMessageConstants.TELEGRAM_RELAY_FAILED_PREFIX + detail, null);
         }
+    }
+
+    /**
+     * 将调用 gotd/td 侧车时的底层网络异常格式化为可读提示，避免 JDK HttpClient ConnectException.getMessage() 为 null。
+     */
+    private String formatBridgeTransportError(String baseUrl, Exception ex) {
+        if (hasCause(ex, ConnectException.class)
+                || hasCause(ex, UnknownHostException.class)
+                || hasCause(ex, UnresolvedAddressException.class)) {
+            return String.format(ExceptionMessageConstants.TELEGRAM_BRIDGE_UNREACHABLE_FMT, baseUrl);
+        }
+        if (hasCause(ex, HttpTimeoutException.class)) {
+            return String.format(ExceptionMessageConstants.TELEGRAM_BRIDGE_TIMEOUT_FMT, baseUrl, formatExceptionDetail(ex));
+        }
+        return ExceptionMessageConstants.TELEGRAM_RELAY_FAILED_PREFIX + formatExceptionDetail(ex);
+    }
+
+    private String formatExceptionDetail(Throwable ex) {
+        Throwable cursor = ex;
+        Throwable last = ex;
+        while (cursor != null) {
+            if (StringUtils.hasText(cursor.getMessage())) {
+                return cursor.getClass().getSimpleName() + HttpConstants.COLON_SPACE + cursor.getMessage();
+            }
+            last = cursor;
+            cursor = (cursor.getCause() == cursor) ? null : cursor.getCause();
+        }
+        return last.getClass().getSimpleName();
+    }
+
+    private boolean hasCause(Throwable ex, Class<? extends Throwable> targetType) {
+        Throwable cursor = ex;
+        while (cursor != null) {
+            if (targetType.isInstance(cursor)) {
+                return true;
+            }
+            cursor = (cursor.getCause() == cursor) ? null : cursor.getCause();
+        }
+        return false;
     }
 
     private Object parseJsonOrText(String body) {
