@@ -47,6 +47,8 @@ public final class TelegramRelayConstants {
     public static final String FIELD_TIMEOUT = "timeout";
     /** Telegram 响应成功标记字段 */
     public static final String FIELD_OK = "ok";
+    /** Telegram 桥接响应结果字段 */
+    public static final String FIELD_RESULT = "result";
     /** Telegram 桥接响应错误文案字段 */
     public static final String FIELD_ERROR = "error";
 
@@ -83,6 +85,10 @@ public final class TelegramRelayConstants {
     public static final String BRIDGE_PATH_AUTH_START = "/bridge/auth/start";
     /** 桥接接口：提交验证码/两步验证密码并导出 Session */
     public static final String BRIDGE_PATH_AUTH_VERIFY = "/bridge/auth/verify";
+    /** 桥接接口：发起二维码扫码登录 */
+    public static final String BRIDGE_PATH_AUTH_QR_START = "/bridge/auth/qr/start";
+    /** 桥接接口：轮询二维码扫码状态或提交 2FA 密码 */
+    public static final String BRIDGE_PATH_AUTH_QR_POLL = "/bridge/auth/qr/poll";
 
     /** 桥接活动流水动作名称 */
     public static final String ACTION_USER_ME = "user.me";
@@ -125,4 +131,16 @@ public final class TelegramRelayConstants {
     public static final String BRIDGE_FIELD_LOGIN_ID = "loginId";
     public static final String BRIDGE_FIELD_CODE = "code";
     public static final String BRIDGE_FIELD_PASSWORD = "password";
+    public static final String BRIDGE_FIELD_QR_LOGIN_ID = "qrLoginId";
+    public static final String BRIDGE_FIELD_QR_URL = "qrUrl";
+    public static final String BRIDGE_FIELD_QR_SVG = "qrSvg";
+
+    /** 二维码 SVG 渲染模板片段 */
+    public static final String QR_SVG_PREFIX = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 ";
+    public static final String QR_SVG_MIDDLE =
+            "\" width=\"200\" height=\"200\" shape-rendering=\"crispEdges\" role=\"img\" aria-label=\"Telegram QR\">"
+                    + "<rect width=\"100%\" height=\"100%\" fill=\"#ffffff\"/>"
+                    + "<path fill=\"#0f172a\" d=\"";
+    public static final String QR_SVG_PATH_UNIT = "h1v1h-1z";
+    public static final String QR_SVG_SUFFIX = "\"/></svg>";
 }

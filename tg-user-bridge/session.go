@@ -20,11 +20,25 @@ type StringSessionStorage struct {
 }
 
 // NewStringSessionStorage 从已有会话字符串构造内存存储；空字符串表示全新未登录会话。
+// 同时兼容本服务生成的 tg_sess_v1:... 字符串、裸 Base64 gotd/td JSON 以及 Python Telethon StringSession。
 func NewStringSessionStorage(encoded string) (*StringSessionStorage, error) {
 	trimmed := strings.TrimSpace(encoded)
 	if trimmed == "" {
 		return &StringSessionStorage{}, nil
 	}
+
+	// 若未带 tg_sess_v1: 前缀，优先尝试按 Telethon StringSession 解析并转换为 gotd/td 标准会话格式
+	if !strings.HasPrefix(trimmed, sessionStringPrefix) {
+		if telethonData, err := session.TelethonSession(trimmed); err == nil && telethonData != nil {
+			storage := &StringSessionStorage{}
+			loader := session.Loader{Storage: storage}
+			if saveErr := loader.Save(context.Background(), telethonData); saveErr != nil {
+				return nil, fmt.Errorf("转换 Telethon StringSession 失败: %w", saveErr)
+			}
+			return storage, nil
+		}
+	}
+
 	raw, err := decodeSessionString(trimmed)
 	if err != nil {
 		return nil, err

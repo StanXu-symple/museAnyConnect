@@ -93,6 +93,10 @@ class TelegramUserRelayIntegrationTest {
                         "{\"ok\":true,\"result\":{\"loginId\":\"login-abc\",\"status\":\"WAIT_CODE\"}}";
                 case TelegramRelayConstants.BRIDGE_PATH_AUTH_VERIFY ->
                         "{\"ok\":true,\"result\":{\"loginId\":\"login-abc\",\"status\":\"AUTHORIZED\",\"sessionString\":\"tg_sess_v1:demoSession\"}}";
+                case TelegramRelayConstants.BRIDGE_PATH_AUTH_QR_START ->
+                        "{\"ok\":true,\"result\":{\"qrLoginId\":\"qr-123\",\"status\":\"WAIT_SCAN\",\"qrUrl\":\"tg://login?token=AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA\",\"expiresAt\":1999999999}}";
+                case TelegramRelayConstants.BRIDGE_PATH_AUTH_QR_POLL ->
+                        "{\"ok\":true,\"result\":{\"qrLoginId\":\"qr-123\",\"status\":\"AUTHORIZED\",\"sessionString\":\"tg_sess_v1:qrSession\"}}";
                 default -> "{\"ok\":false,\"error\":\"unknown path\"}";
             };
             byte[] bytes = jsonResp.getBytes(StandardCharsets.UTF_8);
@@ -267,6 +271,25 @@ class TelegramUserRelayIntegrationTest {
                         .content("{\"loginId\":\"login-abc\",\"code\":\"12345\",\"bridgeUrl\":\"" + mockBridgeUrl + "\",\"bridgeToken\":\"" + BRIDGE_TOKEN + "\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.sessionString").value("tg_sess_v1:demoSession"));
+
+        // 9b. 二维码扫码登录接口（自动生成内联 SVG 二维码并轮询返回 Session 字符串）
+        mockMvc.perform(post("/api/connectors/telegram/auth/qr/start")
+                        .header(RelayAuthFilter.HEADER_NAME, API_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"apiId\":123456,\"apiHash\":\"hash-secret-xyz\",\"bridgeUrl\":\"" + mockBridgeUrl + "\",\"bridgeToken\":\"" + BRIDGE_TOKEN + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.qrLoginId").value("qr-123"))
+                .andExpect(jsonPath("$.result.status").value("WAIT_SCAN"))
+                .andExpect(jsonPath("$.result.qrUrl", containsString("tg://login?token=")))
+                .andExpect(jsonPath("$.result.qrSvg", containsString("<svg ")));
+
+        mockMvc.perform(post("/api/connectors/telegram/auth/qr/poll")
+                        .header(RelayAuthFilter.HEADER_NAME, API_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"qrLoginId\":\"qr-123\",\"bridgeUrl\":\"" + mockBridgeUrl + "\",\"bridgeToken\":\"" + BRIDGE_TOKEN + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.status").value("AUTHORIZED"))
+                .andExpect(jsonPath("$.result.sessionString").value("tg_sess_v1:qrSession"));
 
         // 10. AI 文档自动收录新增的个人账号 MTProto 端点
         mockMvc.perform(get("/api/ai/llms.txt")

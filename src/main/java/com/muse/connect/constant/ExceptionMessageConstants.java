@@ -194,6 +194,14 @@ public final class ExceptionMessageConstants {
     public static final String TELEGRAM_AUTH_START_REQUIRED = "apiId, apiHash and phone are required";
     /** Telegram 交互登录校验参数缺失 */
     public static final String TELEGRAM_AUTH_VERIFY_REQUIRED = "loginId is required";
+    /** Telegram 二维码登录必填参数校验 */
+    public static final String TELEGRAM_QR_START_REQUIRED = "apiId and apiHash are required";
+    /** Telegram 二维码轮询必填参数校验 */
+    public static final String TELEGRAM_QR_POLL_REQUIRED = "qrLoginId is required";
+    /** QR 编码文本为空异常 */
+    public static final String QR_TEXT_EMPTY = "QR 编码内容不能为空";
+    /** QR 编码文本超长异常前缀 */
+    public static final String QR_TEXT_TOO_LONG_PREFIX = "QR 编码内容超过最大支持长度（180 字节）: ";
     /** Telegram 侧车地址格式非法提示模板 */
     public static final String TELEGRAM_BRIDGE_URL_INVALID_FMT =
             "Telegram 侧车地址无效（%s）：请填写 tg-user-bridge 的 HTTP 地址（如 http://127.0.0.1:8081 或 http://tg-user-bridge:8081），无需填写 Telegram 官方 DC IP（如 149.154.167.50:443）";

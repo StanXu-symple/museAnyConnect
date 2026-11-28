@@ -2,6 +2,7 @@ package com.muse.connect.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.muse.connect.config.AppProperties;
 import com.muse.connect.config.HttpClientFactory;
 import com.muse.connect.constant.ExceptionMessageConstants;
@@ -355,6 +356,69 @@ public class TelegramRelayService {
             payload.put(TelegramRelayConstants.BRIDGE_FIELD_PASSWORD, password);
         }
         return invokeRawBridge(resolveBridgeUrl(bridgeUrl), resolveBridgeToken(bridgeToken), TelegramRelayConstants.BRIDGE_PATH_AUTH_VERIFY, payload);
+    }
+
+    /**
+     * 转发至 gotd/td 侧车发起 Telegram 二维码扫码登录，并自动生成可直接展示的 SVG 二维码。
+     */
+    public Object startQrUserAuth(
+            Integer apiId,
+            String apiHash,
+            String bridgeUrl,
+            String bridgeToken,
+            String proxyHost,
+            Integer proxyPort
+    ) {
+        if (apiId == null || apiId <= 0 || !StringUtils.hasText(apiHash)) {
+            throw new ConnectorException(HttpStatus.BAD_REQUEST, ExceptionMessageConstants.TELEGRAM_QR_START_REQUIRED);
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put(TelegramRelayConstants.BRIDGE_FIELD_API_ID, apiId);
+        payload.put(TelegramRelayConstants.BRIDGE_FIELD_API_HASH, apiHash.trim());
+        if (StringUtils.hasText(proxyHost)) {
+            payload.put(TelegramRelayConstants.BRIDGE_FIELD_PROXY_HOST, proxyHost.trim());
+        }
+        if (proxyPort != null && proxyPort > 0) {
+            payload.put(TelegramRelayConstants.BRIDGE_FIELD_PROXY_PORT, proxyPort);
+        }
+        Object resp = invokeRawBridge(resolveBridgeUrl(bridgeUrl), resolveBridgeToken(bridgeToken), TelegramRelayConstants.BRIDGE_PATH_AUTH_QR_START, payload);
+        return attachQrSvgIfPresent(resp);
+    }
+
+    /**
+     * 轮询 Telegram 二维码扫码登录状态；若开启 2FA 则附带 password 完成二次校验。
+     */
+    public Object pollQrUserAuth(
+            String qrLoginId,
+            String password,
+            String bridgeUrl,
+            String bridgeToken
+    ) {
+        if (!StringUtils.hasText(qrLoginId)) {
+            throw new ConnectorException(HttpStatus.BAD_REQUEST, ExceptionMessageConstants.TELEGRAM_QR_POLL_REQUIRED);
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put(TelegramRelayConstants.BRIDGE_FIELD_QR_LOGIN_ID, qrLoginId.trim());
+        if (StringUtils.hasText(password)) {
+            payload.put(TelegramRelayConstants.BRIDGE_FIELD_PASSWORD, password);
+        }
+        Object resp = invokeRawBridge(resolveBridgeUrl(bridgeUrl), resolveBridgeToken(bridgeToken), TelegramRelayConstants.BRIDGE_PATH_AUTH_QR_POLL, payload);
+        return attachQrSvgIfPresent(resp);
+    }
+
+    private Object attachQrSvgIfPresent(Object resp) {
+        if (resp instanceof ObjectNode root) {
+            JsonNode target = root.has(TelegramRelayConstants.FIELD_RESULT)
+                    ? root.get(TelegramRelayConstants.FIELD_RESULT)
+                    : root;
+            if (target instanceof ObjectNode targetObj && targetObj.has(TelegramRelayConstants.BRIDGE_FIELD_QR_URL)) {
+                String qrUrl = targetObj.get(TelegramRelayConstants.BRIDGE_FIELD_QR_URL).asText();
+                if (StringUtils.hasText(qrUrl)) {
+                    targetObj.put(TelegramRelayConstants.BRIDGE_FIELD_QR_SVG, QrCodeSvgEncoder.encodeToSvg(qrUrl));
+                }
+            }
+        }
+        return resp;
     }
 
     /**

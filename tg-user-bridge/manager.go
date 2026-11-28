@@ -581,8 +581,10 @@ func (lm *LoginManager) StartLogin(ctx context.Context, req StartLoginRequest) (
 	cmdCh := make(chan loginVerifyCmd, 1)
 
 	type initResult struct {
-		phoneCodeHash string
-		err           error
+		phoneCodeHash       string
+		deliveryType        string
+		deliveryDescription string
+		err                 error
 	}
 	initCh := make(chan initResult, 1)
 
@@ -603,7 +605,13 @@ func (lm *LoginManager) StartLogin(ctx context.Context, req StartLoginRequest) (
 				return initErr
 			}
 
-			initCh <- initResult{phoneCodeHash: sent.PhoneCodeHash}
+			deliveryType, deliveryDesc := describeSentCodeType(sent.Type)
+			log.Printf("Telegram 验证码已由官方服务端受理: loginId=%s delivery=%s (%s)", loginID, deliveryType, deliveryDesc)
+			initCh <- initResult{
+				phoneCodeHash:       sent.PhoneCodeHash,
+				deliveryType:        deliveryType,
+				deliveryDescription: deliveryDesc,
+			}
 			awaitingPassword := false
 
 			for {
@@ -687,11 +695,13 @@ func (lm *LoginManager) StartLogin(ctx context.Context, req StartLoginRequest) (
 		lm.mu.Unlock()
 
 		return map[string]any{
-			"loginId":       loginID,
-			"status":        "WAIT_CODE",
-			"phone":         phone,
-			"phoneCodeHash": res.phoneCodeHash,
-			"expiresInSec":  int(pendingLoginTimeout.Seconds()),
+			"loginId":             loginID,
+			"status":              "WAIT_CODE",
+			"phone":               phone,
+			"phoneCodeHash":       res.phoneCodeHash,
+			"deliveryType":        res.deliveryType,
+			"deliveryDescription": res.deliveryDescription,
+			"expiresInSec":        int(pendingLoginTimeout.Seconds()),
 		}, nil
 	case <-ctx.Done():
 		cancel()
@@ -781,6 +791,22 @@ func (lm *LoginManager) CloseAll() {
 		delete(lm.pending, k)
 	}
 	lm.mu.Unlock()
+}
+
+// describeSentCodeType 解析 Telegram auth.SentCode 返回的真实验证码下发渠道。
+func describeSentCodeType(sentType tg.AuthSentCodeTypeClass) (string, string) {
+	switch t := sentType.(type) {
+	case *tg.AuthSentCodeTypeApp:
+		return "app", fmt.Sprintf("Telegram 客户端内官方通知（%d 位数字，请在已登录设备查看带蓝勾的 Telegram 对话或已归档对话）", t.Length)
+	case *tg.AuthSentCodeTypeSMS:
+		return "sms", fmt.Sprintf("手机短信 SMS（%d 位数字；若 +86 长时间收不到，请先在手机/电脑登录官方 Telegram 再重发以切换为 App 内通知）", t.Length)
+	case *tg.AuthSentCodeTypeEmailCode:
+		return "email", fmt.Sprintf("绑定邮箱 %s（%d 位数字，请检查收件箱及垃圾箱）", t.EmailPattern, t.Length)
+	case *tg.AuthSentCodeTypeCall:
+		return "call", fmt.Sprintf("语音电话播报（%d 位数字）", t.Length)
+	default:
+		return "other", fmt.Sprintf("Telegram 官方下发渠道（%T）", sentType)
+	}
 }
 
 func randomHexID(numBytes int) string {

@@ -253,10 +253,13 @@ docker run -d --name muse-any-connect -p 8080:8080 -v ./data:/data muse-any-conn
 ### 4.2 Telegram
 - **认证方式 (`authMode`)**：
   - `BOT_TOKEN`：标准 Bot API 模式，自动拼接 `https://api.telegram.org/bot<botToken>/<method>`。
-  - `USER_SESSION`：个人账号 MTProto 模式（基于仓库内置的 Go `gotd/td` 侧车 `tg-user-bridge/`），通过单行 `tg_sess_v1:...` 会话字符串持久复用登录态，支持读取任意已加入群组/频道的历史消息、搜索、发/回/改/删/转发消息等完整客户端能力。
+  - `USER_SESSION`：个人账号 MTProto 模式（基于仓库内置的 Go `gotd/td` 侧车 `tg-user-bridge/`），通过单行 `tg_sess_v1:...` 会话字符串持久复用登录态（同时原生兼容直接粘贴 **Python Telethon `StringSession`** 字符串），支持读取任意已加入群组/频道的历史消息、搜索、发/回/改/删/转发消息等完整客户端能力。
 - **如何获取**：
   - **Bot Token**：在 Telegram 联系 `@BotFather` 发送 `/newbot` 获取 Bot Token；向机器人发消息后调用 `GET /updates` 从 `message.chat.id` 获取 Chat ID。
-  - **个人账号 (`USER_SESSION`)**：登录 `https://my.telegram.org/apps` 申请 `api_id` 与 `api_hash` → 通过 `docker compose up -d` 同时启动 `tg-user-bridge` 侧车 → 在控制台新建 Telegram（`USER_SESSION`）连接器页面直接使用内置**“在线登录个人账号”**工具收验证码（含可选 2FA）并自动回填 `telegramSession`。
+  - **个人账号 (`USER_SESSION`)**：登录 `https://my.telegram.org/apps` 申请 `api_id` 与 `api_hash` → 在控制台新建 Telegram（`USER_SESSION`）连接器页面支持 3 种方式获取 Session：
+    1. **二维码扫码登录（推荐，免收验证码）**：点击“生成登录二维码”，用手机 Telegram `设置 → 设备 → 连接桌面设备` 扫码确认（若开启两步验证则输入 2FA 云密码），登录成功后自动回填 `telegramSession`；
+    2. **手机号验证码登录**：输入带 `+` 国际区号的手机号接收验证码（含可选 2FA）并自动回填；
+    3. **导入 Telethon `StringSession`**：支持直接粘贴通过 Python `Telethon` 导出的 `StringSession` 字符串，侧车自动转换识别。
 - **支持字段**：
   - Bot 模式：`apiBaseUrl`（默认 `https://api.telegram.org`）、`botToken`、`defaultChatId`、`parseMode`（`MarkdownV2` / `HTML` / 空）、`proxyHost`、`proxyPort`、`timeoutMs`。
   - 个人账号模式：`apiBaseUrl`（留空走 `MUSE_TELEGRAM_BRIDGE_URL`）、`telegramApiId`、`telegramApiHash`、`telegramSession`、`telegramBridgeToken`、`defaultChatId`、`parseMode`（`HTML` / 空）、`proxyHost`（默认 HTTP CONNECT，填 `socks5://host` 支持 SOCKS5）、`proxyPort`、`timeoutMs`。
@@ -327,7 +330,9 @@ docker run -d --name muse-any-connect -p 8080:8080 -v ./data:/data muse-any-conn
   - `POST /api/relay/telegram/{profileId}/read` — 标记已读：`{"chatId":"-1001234567890","maxId":1024}`
   - `GET /api/relay/telegram/{profileId}/resolve?chatId=@telegram` — 解析 `@username` 或会话实体信息
 - **控制台交互式登录辅助接口**（管理员鉴权）：
-  - `POST /api/connectors/telegram/auth/start` — 发送登录验证码
+  - `POST /api/connectors/telegram/auth/qr/start` — 发起二维码扫码登录，返回 `qrLoginId`、`qrUrl`（`tg://login?token=...`）与服务端纯 JDK 渲染的 `qrSvg`
+  - `POST /api/connectors/telegram/auth/qr/poll` — 轮询扫码状态（或提交 2FA 云密码），确认后返回 `tg_sess_v1:...` 会话字符串
+  - `POST /api/connectors/telegram/auth/start` — 发送手机号登录验证码
   - `POST /api/connectors/telegram/auth/verify` — 提交验证码（及可选 2FA 云密码）换取 `tg_sess_v1:...` 会话字符串
 
 ### 5.4 SSH 中转接口 (`/api/relay/ssh/{profileId}`)

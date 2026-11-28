@@ -52,6 +52,10 @@ public final class RouteConstants {
     public static final String API_TELEGRAM_AUTH_START = "/connectors/telegram/auth/start";
     /** Telegram 个人账号交互登录：提交验证码/2FA 密码 */
     public static final String API_TELEGRAM_AUTH_VERIFY = "/connectors/telegram/auth/verify";
+    /** Telegram 个人账号二维码登录：生成登录二维码 */
+    public static final String API_TELEGRAM_AUTH_QR_START = "/connectors/telegram/auth/qr/start";
+    /** Telegram 个人账号二维码登录：轮询扫码状态或提交 2FA 密码 */
+    public static final String API_TELEGRAM_AUTH_QR_POLL = "/connectors/telegram/auth/qr/poll";
     /** 系统统计信息路径 */
     public static final String API_STATS = "/stats";
 

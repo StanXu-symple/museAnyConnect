@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -51,6 +53,26 @@ func TestStringSessionStorageRoundTrip(t *testing.T) {
 	if _, err := NewStringSessionStorage("tg_sess_v1:!!!not-base64!!!"); err == nil {
 		t.Fatalf("非法 Base64 字符串应当返回错误")
 	}
+
+	// 兼容 Python Telethon v1 StringSession（'1' + Base64URL(dc(1B) + ipv4(4B) + port(2B) + authKey(256B))）
+	rawTelethon := make([]byte, 1+4+2+256)
+	rawTelethon[0] = 2
+	copy(rawTelethon[1:5], []byte{149, 154, 167, 50})
+	binary.BigEndian.PutUint16(rawTelethon[5:7], 443)
+	for i := 7; i < len(rawTelethon); i++ {
+		rawTelethon[i] = byte(i)
+	}
+	telethonStr := "1" + base64.URLEncoding.EncodeToString(rawTelethon)
+	fromTelethon, err := NewStringSessionStorage(telethonStr)
+	if err != nil {
+		t.Fatalf("Telethon StringSession 解析失败: %v", err)
+	}
+	if !strings.HasPrefix(fromTelethon.String(), sessionStringPrefix) {
+		t.Fatalf("Telethon 会话转换后应输出 %s 前缀，实际: %s", sessionStringPrefix, fromTelethon.String())
+	}
+	if loadedTelethon, err := fromTelethon.LoadSession(ctx); err != nil || !strings.Contains(string(loadedTelethon), "149.154.167.50:443") {
+		t.Fatalf("Telethon 会话加载内容异常: err=%v data=%s", err, string(loadedTelethon))
+	}
 }
 
 func TestPeerCacheAndHelperParsing(t *testing.T) {
@@ -74,6 +96,16 @@ func TestPeerCacheAndHelperParsing(t *testing.T) {
 
 	if !isSignedDigits("-100123456") || !isSignedDigits("42") || isSignedDigits("@muse") || isSignedDigits("-") {
 		t.Fatalf("isSignedDigits 校验逻辑异常")
+	}
+
+	if dt, desc := describeSentCodeType(&tg.AuthSentCodeTypeApp{Length: 5}); dt != "app" || !strings.Contains(desc, "5") {
+		t.Fatalf("App 渠道解析异常: type=%s desc=%s", dt, desc)
+	}
+	if dt, _ := describeSentCodeType(&tg.AuthSentCodeTypeSMS{Length: 5}); dt != "sms" {
+		t.Fatalf("SMS 渠道解析异常: type=%s", dt)
+	}
+	if dt, desc := describeSentCodeType(&tg.AuthSentCodeTypeEmailCode{EmailPattern: "s***@example.com", Length: 6}); dt != "email" || !strings.Contains(desc, "s***@example.com") {
+		t.Fatalf("Email 渠道解析异常: type=%s desc=%s", dt, desc)
 	}
 }
 

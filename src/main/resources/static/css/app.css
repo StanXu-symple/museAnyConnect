@@ -811,3 +811,49 @@ textarea.form-control {
     color: var(--primary);
     text-decoration: underline;
 }
+
+/* Telegram 二维码扫码登录面板样式 */
+.auth-mode-tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.tg-qr-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+    padding: 14px;
+    border-radius: 10px;
+    background: #ffffff;
+    border: 1px solid #dbeafe;
+}
+
+.tg-qr-svg {
+    width: 204px;
+    height: 204px;
+    padding: 2px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.tg-qr-svg svg {
+    width: 200px;
+    height: 200px;
+    display: block;
+}
+
+.tg-qr-tips {
+    flex: 1;
+    min-width: 220px;
+    font-size: 0.83rem;
+    color: #334155;
+}

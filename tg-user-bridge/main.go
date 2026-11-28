@@ -25,6 +25,7 @@ type BridgeServer struct {
 	token    string
 	sessions *SessionManager
 	logins   *LoginManager
+	qrLogins *QrLoginManager
 }
 
 func NewBridgeServer(token string) *BridgeServer {
@@ -32,10 +33,12 @@ func NewBridgeServer(token string) *BridgeServer {
 		token:    strings.TrimSpace(token),
 		sessions: NewSessionManager(),
 		logins:   NewLoginManager(),
+		qrLogins: NewQrLoginManager(),
 	}
 }
 
 func (s *BridgeServer) Close() {
+	s.qrLogins.CloseAll()
 	s.logins.CloseAll()
 	s.sessions.CloseAll()
 }
@@ -44,9 +47,11 @@ func (s *BridgeServer) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
 
-	// 交互式登录接口（获取 StringSession）
+	// 交互式登录接口（手机号验证码与二维码扫码登录，用于获取 StringSession）
 	mux.HandleFunc("/bridge/auth/start", s.withAuth(jsonEndpoint(s.logins.StartLogin)))
 	mux.HandleFunc("/bridge/auth/verify", s.withAuth(jsonEndpoint(s.logins.VerifyLogin)))
+	mux.HandleFunc("/bridge/auth/qr/start", s.withAuth(jsonEndpoint(s.qrLogins.StartQrLogin)))
+	mux.HandleFunc("/bridge/auth/qr/poll", s.withAuth(jsonEndpoint(s.qrLogins.PollQrLogin)))
 
 	// 个人账号 MTProto 业务能力接口
 	mux.HandleFunc("/bridge/me", s.withAuth(jsonEndpoint(s.handleMe)))

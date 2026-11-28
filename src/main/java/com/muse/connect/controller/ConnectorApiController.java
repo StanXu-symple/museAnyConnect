@@ -77,6 +77,26 @@ public class ConnectorApiController {
     ) {
     }
 
+    /** Telegram 个人账号二维码登录发起请求体 */
+    public record TelegramQrStartRequest(
+            Integer apiId,
+            String apiHash,
+            String bridgeUrl,
+            String bridgeToken,
+            String proxyHost,
+            Integer proxyPort
+    ) {
+    }
+
+    /** Telegram 个人账号二维码登录轮询或 2FA 密码提交请求体 */
+    public record TelegramQrPollRequest(
+            String qrLoginId,
+            String password,
+            String bridgeUrl,
+            String bridgeToken
+    ) {
+    }
+
     @AiEndpoint(AiDocMeta.EP_CONNECTOR_LIST)
     @GetMapping(RouteConstants.API_CONNECTORS)
     public List<ConnectorProfile> list() {
@@ -150,6 +170,30 @@ public class ConnectorApiController {
         return telegramRelayService.verifyUserAuth(
                 req.loginId(),
                 req.code(),
+                req.password(),
+                req.bridgeUrl(),
+                req.bridgeToken()
+        );
+    }
+
+    /** 发起 Telegram 个人账号二维码扫码登录（免收验证码） */
+    @PostMapping(RouteConstants.API_TELEGRAM_AUTH_QR_START)
+    public Object startTelegramQrAuth(@RequestBody TelegramQrStartRequest req) {
+        return telegramRelayService.startQrUserAuth(
+                req.apiId(),
+                req.apiHash(),
+                req.bridgeUrl(),
+                req.bridgeToken(),
+                req.proxyHost(),
+                req.proxyPort()
+        );
+    }
+
+    /** 轮询 Telegram 二维码扫码状态或提交 2FA 云密码，换取持久化 Session 字符串 */
+    @PostMapping(RouteConstants.API_TELEGRAM_AUTH_QR_POLL)
+    public Object pollTelegramQrAuth(@RequestBody TelegramQrPollRequest req) {
+        return telegramRelayService.pollQrUserAuth(
+                req.qrLoginId(),
                 req.password(),
                 req.bridgeUrl(),
                 req.bridgeToken()
