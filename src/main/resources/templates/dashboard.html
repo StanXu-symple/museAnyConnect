@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MuseAnyConnect - HTTP 连接器中转站</title>
-    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link rel="stylesheet" th:href="@{/css/app.css(v='20261128')}">
 </head>
 <body>
 <header class="topbar">
@@ -57,7 +57,7 @@
             <div class="stat-card-top">
                 <span class="stat-label">已配置连接器</span>
                 <span class="stat-icon stat-icon-blue" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                 </span>
             </div>
             <div class="stat-value" th:text="${stats.connectorCount}">0</div>
@@ -67,7 +67,7 @@
             <div class="stat-card-top">
                 <span class="stat-label">SQLite 有效数据</span>
                 <span class="stat-icon stat-icon-emerald" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
                 </span>
             </div>
             <div class="stat-value"><span th:text="${stats.dbDataBytes}">0</span> <span class="stat-unit">B</span></div>
@@ -77,7 +77,7 @@
             <div class="stat-card-top">
                 <span class="stat-label">JVM 堆内存使用</span>
                 <span class="stat-icon stat-icon-violet" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
                 </span>
             </div>
             <div class="stat-value"><span th:text="${stats.jvmUsedMemoryMb}">0</span> <span class="stat-unit">MB</span></div>
@@ -87,7 +87,7 @@
             <div class="stat-card-top">
                 <span class="stat-label">环形日志缓冲区</span>
                 <span class="stat-icon stat-icon-amber" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 </span>
             </div>
             <div class="stat-value"><span th:text="${stats.activityCount}">0</span> <span class="stat-unit">/ <span th:text="${stats.activityBufferCapacity}">100</span></span></div>
@@ -124,7 +124,7 @@
 
         <div th:if="${#lists.isEmpty(connectors)}" class="empty-state">
             <div class="empty-state-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
             </div>
             <div class="empty-state-title">暂无连接器配置</div>
             <p class="empty-state-desc">点击右上角“<strong>连接器</strong>”或下方按钮，快速接入 <strong>X</strong>、<strong>Telegram</strong> 或 <strong>SSH</strong>。</p>

@@ -369,6 +369,8 @@ body {
 
 .action-group {
     gap: 6px;
+    flex-wrap: nowrap;
+    white-space: nowrap;
 }
 
 .alert {
@@ -437,7 +439,7 @@ tr:last-child td { border-bottom: none; }
 
 .endpoint-chip {
     display: inline-block;
-    max-width: 340px;
+    max-width: 260px;
     padding: 3px 9px;
     border-radius: 6px;
     background: #f8fafc;
