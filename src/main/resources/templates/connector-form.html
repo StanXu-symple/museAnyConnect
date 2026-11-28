@@ -14,10 +14,10 @@
         <span class="brand-tag">HTTP Relay</span>
     </a>
     <nav class="nav-links">
+        <a class="nav-link active" th:href="@{/connectors/new(type='X')}">连接器</a>
         <a class="nav-link" th:href="@{/}">控制台</a>
         <a class="nav-link" th:href="@{/playground}">在线调试</a>
         <a class="nav-link" th:href="@{/ai-docs}">AI 文档</a>
-        <a class="nav-link active" th:href="@{/connectors/new(type='X')}">连接器</a>
         <span th:if="${authEnabled && currentUser != null}" class="nav-user mono" th:text="${currentUser}">admin</span>
         <form th:if="${authEnabled}" class="inline-form" th:action="@{/logout}" method="post">
             <input type="hidden" name="_csrf" th:value="${csrfToken}">
@@ -81,7 +81,7 @@
                     <input id="bearerToken" type="text" class="form-control mono" th:field="*{config.bearerToken}" placeholder="AAAA...">
                 </div>
 
-                <details class="guide-box" th:attr="open=${!editing ? 'open' : null}">
+                <details class="guide-box">
                     <summary class="guide-summary">📖 获取教程：如何拿到 X 的 Bearer Token / OAuth 2.0 Token</summary>
                     <div class="guide-body">
                         <div class="guide-sub-title">方式一：App-Only Bearer Token（最快，适合只读搜推文 / 查公开用户）</div>
@@ -134,7 +134,7 @@
                     </div>
                 </div>
 
-                <details class="guide-box" th:attr="open=${!editing ? 'open' : null}">
+                <details class="guide-box">
                     <summary class="guide-summary">📖 获取教程：如何拿到 X 的 OAuth 1.0a 四个密钥（推荐长期发推）</summary>
                     <div class="guide-body">
                         <ol class="guide-steps">
@@ -184,7 +184,7 @@
                            placeholder="CreateTweet=...,SearchTimeline=...,UserByScreenName=...">
                 </div>
 
-                <details class="guide-box" th:attr="open=${!editing ? 'open' : null}">
+                <details class="guide-box">
                     <summary class="guide-summary">📖 获取教程：普通用户如何从浏览器获取 X 的 auth_token 和 ct0</summary>
                     <div class="guide-body">
                         <ol class="guide-steps">
@@ -284,7 +284,7 @@
                     </div>
                 </div>
 
-                <details id="guide-telegram-bot" class="guide-box hidden" th:attr="open=${!editing ? 'open' : null}">
+                <details id="guide-telegram-bot" class="guide-box hidden">
                     <summary class="guide-summary">📖 获取教程：如何拿到 Telegram Bot Token 与 Chat ID</summary>
                     <div class="guide-body">
                         <ol class="guide-steps">
@@ -298,7 +298,7 @@
                     </div>
                 </details>
 
-                <details id="guide-telegram-user" class="guide-box hidden" th:attr="open=${!editing ? 'open' : null}">
+                <details id="guide-telegram-user" class="guide-box hidden">
                     <summary class="guide-summary">📖 获取教程：如何配置个人账号 MTProto（gotd/td 侧车）</summary>
                     <div class="guide-body">
                         <ol class="guide-steps">
@@ -342,7 +342,7 @@
                     <label for="sshPassword">SSH 登录密码 *</label>
                     <input id="sshPassword" type="password" class="form-control mono" th:field="*{config.password}">
 
-                    <details class="guide-box" th:attr="open=${!editing ? 'open' : null}">
+                    <details class="guide-box">
                         <summary class="guide-summary">📖 配置说明：SSH 密码认证注意事项</summary>
                         <div class="guide-body">
                             <ol class="guide-steps">
@@ -366,7 +366,7 @@
                         <input id="sshPassphrase" type="password" class="form-control mono" th:field="*{config.passphrase}">
                     </div>
 
-                    <details class="guide-box" th:attr="open=${!editing ? 'open' : null}">
+                    <details class="guide-box">
                         <summary class="guide-summary">📖 获取教程：如何生成并配置 SSH 私钥（支持 Ed25519 / RSA / ECDSA）</summary>
                         <div class="guide-body">
                             <ol class="guide-steps">
